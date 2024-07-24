@@ -169,9 +169,10 @@ void Yolov10::postprocess(std::vector<Ort::Value> &output_tensors){
     std::vector<float> scores;
     std::vector<int> labels;
     std::vector<cv::Rect> boxes;
-    auto net_w = (float)this->input_nodes[0].dim.at(3); // 1024
-    auto net_h = (float)this->input_nodes[0].dim.at(2); // 1024
+    auto net_w = (float)this->input_nodes[0].dim.at(3);
+    auto net_h = (float)this->input_nodes[0].dim.at(2);
     float scale = std::min(net_w/ori_img->cols,net_h/ori_img->rows);
+
     for(size_t index = 0;index < this->output_nodes[0].dim[1]; index +=this->output_nodes[0].dim[2]){
         auto x1 = output[index];
         auto y1 = output[index + 1] ;

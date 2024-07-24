@@ -4,7 +4,7 @@
 
 int main(int argc, char const *argv[]){
     auto yolov10 = std::make_unique<Yolov10>();
-    
+
     yolov10->initialize(std::string{"../models/yolov10m.onnx"},true);
     yolov10->setparms({.score=0.5f,.nms=0.5f});
     
