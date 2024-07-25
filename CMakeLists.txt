@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15) #设置cmake最低要求
 project(
     main      #项目名称
     LANGUAGES CXX C     #编程语言
-    DESCRIPTION "table detect demo"
+    DESCRIPTION "YOLOv10+"
 )
 set(CMAKE_CXX_STANDARD 23) # 设置为C++ 23标准
 set(CMAKE_BUILD_TYPE "Release" )
@@ -18,11 +18,14 @@ set(CMAKE_BUILD_PARALLEL_LEVEL 8)
 
 
 include_directories(${PROJECT_DIR}/include/)
+include_directories(${PROJECT_DIR}/include/bytetrack/include/)
 # 设定项目编写的所有代码文件路径
 file(GLOB SRC_FILES 
     CMAKE_CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/include/*.h"
     "${PROJECT_SOURCE_DIR}/src/*.cpp"
+    "${PROJECT_SOURCE_DIR}/include/bytetrack/include/*.h"
+    "${PROJECT_SOURCE_DIR}/include/bytetrack/src/*.cpp"
 )
 
 find_package(TBB REQUIRED)
