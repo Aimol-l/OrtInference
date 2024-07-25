@@ -25,10 +25,13 @@ file(GLOB SRC_FILES
     "${PROJECT_SOURCE_DIR}/src/*.cpp"
 )
 
+find_package(TBB REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(onnxruntime REQUIRED)
 
 add_executable(${CMAKE_PROJECT_NAME} ${SRC_FILES})
 
-target_link_libraries(${CMAKE_PROJECT_NAME} ${OpenCV_LIBRARIES})
+
+target_link_libraries(${CMAKE_PROJECT_NAME} TBB::tbb)
 target_link_libraries(${CMAKE_PROJECT_NAME} onnxruntime)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${OpenCV_LIBRARIES})

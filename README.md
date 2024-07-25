@@ -8,7 +8,7 @@
 + cudnn >= 9.x,tested on 9.2
 + gcc >= 14.1.1 (required c++23)
 + cmake >= 3.25,tested on 3.30
-
++ tbb, tested on 2021.13.0
 ## 使用
 
 ```sh

@@ -88,7 +88,7 @@ int Yolov10::initialize(std::string onnx_path, bool is_cuda){
         std::print("{} = ",node.name);
         for(size_t j=0;j<output_dims.size()-1;j++) std::print("{}x",node.dim[j]);
         std::println("{}",node.dim[output_dims.size()-1]);
-        output_nodes.push_back(node);
+        this->output_nodes.push_back(node);
     }
     //************************************************
     this->is_inited = true;
@@ -101,6 +101,8 @@ int Yolov10::inference(cv::Mat &image){
     this->ori_img = &image;
 
     // 图片预处理
+    // 1. 直接resize
+    // 2. 图像padding
     try {
         this->preprocess(image); 
      }catch (const std::exception& e) {
@@ -109,6 +111,7 @@ int Yolov10::inference(cv::Mat &image){
     }
 
     // 创建模型输入张量
+    // cv::Mat --> Ort::Value
     std::vector<Ort::Value> input_tensor;
     input_tensor.push_back(Ort::Value::CreateTensor<float>(
         memory_info,
@@ -128,11 +131,11 @@ int Yolov10::inference(cv::Mat &image){
     try {
         output_tensors = this->session->Run(
             Ort::RunOptions{ nullptr },
-            input_names.data(),
-            input_tensor.data(),
-            input_tensor.size(),
-            output_names.data(),
-            output_names.size());
+            input_names.data(),  // images
+            input_tensor.data(), // 1*3*640*640
+            input_tensor.size(), // 1
+            output_names.data(), // output0
+            output_names.size()); // 1
     }catch (const std::exception& e) {
         std::println("forward model failed!!");
         return -3;
@@ -149,28 +152,28 @@ int Yolov10::inference(cv::Mat &image){
 
 void Yolov10::preprocess(cv::Mat &image){
     cv::Mat image_ = image.clone();
-    auto net_w = (float)this->input_nodes[0].dim.at(3);
-    auto net_h = (float)this->input_nodes[0].dim.at(2);
+    auto net_w = (float)this->input_nodes[0].dim.at(3); // 640
+    auto net_h = (float)this->input_nodes[0].dim.at(2); // 640
     float scale = std::min(net_w/image.cols,net_h/image.rows);
     cv::resize(image_,image_,cv::Size(int(image.cols*scale),int(image.rows*scale)));
     int top     = (net_h - image_.rows) / 2;
     int bottom  = (net_h - image_.rows) / 2 + int(net_h - image_.rows) % 2;
     int left    = (net_w - image_.cols) / 2;
     int right   = (net_w - image_.cols) / 2 + int(net_w - image_.cols) % 2; 
-    cv::copyMakeBorder(image_, image_, top, bottom, left, right, cv::BORDER_CONSTANT, cv::Scalar(114,114,114));
+    cv::copyMakeBorder(image_, image_, top, bottom, left, right, cv::BORDER_CONSTANT, cv::Scalar(114,114,114)); // padding
     input_images.clear();
     std::vector<cv::Mat> mats{image_};
-    cv::Mat blob = cv::dnn::blobFromImages(mats, 1/255.0,cv::Size(net_w, net_h), cv::Scalar(0, 0, 0), true, false);
+    cv::Mat blob = cv::dnn::blobFromImages(mats, 1/255.0,cv::Size(net_w, net_h), cv::Scalar(0, 0, 0), true, false);//1*3*640*640
     input_images.push_back(std::move(blob));
 }
 
 void Yolov10::postprocess(std::vector<Ort::Value> &output_tensors){
-    float* output = output_tensors[0].GetTensorMutableData<float>();
+    float* output = output_tensors[0].GetTensorMutableData<float>(); // 1*300*6
     std::vector<float> scores;
     std::vector<int> labels;
     std::vector<cv::Rect> boxes;
-    auto net_w = (float)this->input_nodes[0].dim.at(3);
-    auto net_h = (float)this->input_nodes[0].dim.at(2);
+    auto net_w = (float)this->input_nodes[0].dim.at(3); // 1024
+    auto net_h = (float)this->input_nodes[0].dim.at(2); // 1024
     float scale = std::min(net_w/ori_img->cols,net_h/ori_img->rows);
 
     for(size_t index = 0;index < this->output_nodes[0].dim[1]; index +=this->output_nodes[0].dim[2]){
@@ -180,12 +183,15 @@ void Yolov10::postprocess(std::vector<Ort::Value> &output_tensors){
         auto y2  = output[index + 3];
         auto score = output[index + 4];
         auto label = (int)output[index + 5];
+
         auto pad_w = (net_w - ori_img->cols * scale) / 2;
         auto pad_h = (net_h - ori_img->rows * scale) / 2;
+        //从预处理图片还原到原始图片上
         x1 = (x1 - pad_w) / scale;
         x2 = (x2 - pad_w) / scale;
         y1 = (y1 - pad_h) / scale;
         y2 = (y2 - pad_h) / scale;
+
         cv::Rect rect(cv::Point2f(x1,y1),cv::Size2f(x2-x1,y2-y1));
         boxes.emplace_back(rect);
         labels.emplace_back(label);

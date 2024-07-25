@@ -1,12 +1,14 @@
 #include <iostream>
 #include <filesystem>
 #include "Yolov10.h"
+#include "Yolov10SAM.h"
 
 int main(int argc, char const *argv[]){
-    auto yolov10 = std::make_unique<Yolov10>();
-
-    yolov10->initialize(std::string{"../models/yolov10m.onnx"},true);
-    yolov10->setparms({.score=0.5f,.nms=0.5f});
+    auto yolov10sam = std::make_unique<Yolov10SAM>();
+    
+    std::string onnx_path = "../models/yolov10m.onnx|../models/ESAM_encoder.onnx|../models/ESAM_deocder.onnx";
+    yolov10sam->initialize(onnx_path,true);
+    yolov10sam->setparms({.score=0.5f,.nms=0.8f});
     
     std::string folder_path = "../assets/input/*.jpg";
     std::string output_path = "../assets/output/";
@@ -18,7 +20,7 @@ int main(int argc, char const *argv[]){
         std::println("path={}",path);
         cv::Mat image = cv::imread(path);
         auto start = std::chrono::high_resolution_clock::now();
-        int r = yolov10->inference(image);
+        int r = yolov10sam->inference(image);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("duration = {}ms",duration);
