@@ -18,7 +18,11 @@ cmake .. && make && ../bin/./main
 
 ```
 
+
 ## video
 
+[test.mp4](https://www.acfun.cn/v/ac45502468)
+
 [Yolov10 C++ Opencv OnnxRuntime推理部署](https://www.acfun.cn/v/ac45473033?shareUid=31449214)
+
 [Yolov10+SAM C++ Opencv OnnxRuntime推理部署](https://www.acfun.cn/v/ac45487564?shareUid=31449214)

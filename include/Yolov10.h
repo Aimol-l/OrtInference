@@ -29,6 +29,8 @@ protected:
     void postprocess(std::vector<Ort::Value>& output_tensors);
 public:
     Yolov10(){};
+    Yolov10(const Yolov10&) = delete;// 删除拷贝构造函数
+    Yolov10& operator=(const Yolov10&) = delete;// 删除赋值运算符
     ~Yolov10(){if(session != nullptr) delete session;};
     int setparms(Params_v10 parms);
     int initialize(std::string onnx_path, bool is_cuda);

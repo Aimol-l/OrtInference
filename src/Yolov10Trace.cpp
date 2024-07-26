@@ -216,9 +216,11 @@ void Yolov10Trace::postprocess(std::vector<Ort::Value> &output_tensors){
         int b = hash & 0x0000FF;
         ///**************************************************
         std::vector<float> box = output_stracks[i].tlwh;
-        cv::rectangle(*ori_img,cv::Rect{(int)box[0],(int)box[1],(int)box[2],(int)box[3]},cv::Scalar{b,g,r},2);
+        int x = (int)box[0],y=(int)box[1],w=(int)box[2],h=(int)box[3];
+        cv::rectangle(*ori_img,cv::Rect{x,y-20,w,20},cv::Scalar{25,255,188},-1);
+        cv::rectangle(*ori_img,cv::Rect{x,y,w,h},cv::Scalar{b,g,r},2);
         cv::putText(*ori_img,std::format("{}{}:{:.2f}",output_stracks[i].track_id,
             name,output_stracks[i].score),
-            cv::Point{box[0],box[1]-5},1.1,1.5,cv::Scalar{b,g,r});
+            cv::Point{box[0],box[1]-5},1,1.2,cv::Scalar{b,g,r});
     }
 }

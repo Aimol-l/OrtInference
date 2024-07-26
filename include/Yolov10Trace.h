@@ -32,6 +32,8 @@ protected:
     void postprocess(std::vector<Ort::Value>& output_tensors);
 public:
     Yolov10Trace(){};
+    Yolov10Trace(const Yolov10Trace&) = delete;// 删除拷贝构造函数
+    Yolov10Trace& operator=(const Yolov10Trace&) = delete;// 删除赋值运算符
     ~Yolov10Trace(){if(session != nullptr) delete session;};
     int setparms(Params_trace parms);
     int initialize(std::string onnx_path, bool is_cuda);

@@ -73,7 +73,6 @@ void yolotrace(){
     
     std::string onnx_path = "../models/yolov10m.onnx";
     yolov10trace->initialize(onnx_path,true);
-    
 
     std::string video_path = "../assets/video/test.mp4";
     cv::VideoCapture capture(video_path);
@@ -107,6 +106,8 @@ void yolotrace(){
 }   
 
 int main(int argc, char const *argv[]){
+    // yolo();
+    // yolosam();
     yolotrace();
     return 0;   
 }

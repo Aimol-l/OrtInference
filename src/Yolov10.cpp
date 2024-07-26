@@ -209,6 +209,7 @@ void Yolov10::postprocess(std::vector<Ort::Value> &output_tensors){
         int g = (hash & 0x00FF00) >> 8;
         int b = hash & 0x0000FF;
         ///**************************************************
+        cv::rectangle(*ori_img,cv::Rect{boxes[i].x,boxes[i].y-20,boxes[i].width,20},cv::Scalar{25,255,188},-1);
         cv::rectangle(*ori_img,boxes[i],cv::Scalar{b,g,r},2);
         cv::putText(*ori_img,std::format("{}:{:.2f}",name,scores[i]),cv::Point{boxes[i].x,boxes[i].y-5}
         ,1,1.1,cv::Scalar{b,g,r});

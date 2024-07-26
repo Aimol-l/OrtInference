@@ -52,6 +52,8 @@ protected:
 	std::vector<std::vector<float>> gen_decoder_input(std::vector<cv::Rect>&);
 public:
     Yolov10SAM(){};
+	Yolov10SAM(const Yolov10SAM&) = delete;// 删除拷贝构造函数
+    Yolov10SAM& operator=(const Yolov10SAM&) = delete;// 删除赋值运算符
     ~Yolov10SAM(){
         if (yolo_session != nullptr) delete yolo_session;
 		if (encoder_session != nullptr) delete encoder_session;
