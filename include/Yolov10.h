@@ -4,7 +4,7 @@
 #include <print>
 
 
-class Yolov10:public Model{
+class Yolov10:public yo::Model{
 
 struct Params_v10{
     float score = 0.5f;
@@ -16,8 +16,8 @@ private:
     cv::Mat* ori_img = nullptr;
 
     Params_v10 parms;
-    std::vector<Node> input_nodes;
-    std::vector<Node> output_nodes;
+    std::vector<yo::Node> input_nodes;
+    std::vector<yo::Node> output_nodes;
     std::vector<cv::Mat> input_images;
 
     Ort::Session* session = nullptr;

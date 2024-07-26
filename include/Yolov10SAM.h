@@ -3,7 +3,7 @@
 #include <fstream>
 #include <print>
 
-class Yolov10SAM:public Model{
+class Yolov10SAM:public yo::Model{
 
 struct Params_sam{
     float score = 0.5f;
@@ -25,13 +25,13 @@ private:
 	Ort::Session* decoder_session = nullptr;
 	
 	//输入相关
-	std::vector<Node> yolo_input_nodes;
-	std::vector<Node> encoder_input_nodes;
-	std::vector<Node> decoder_input_nodes;
+	std::vector<yo::Node> yolo_input_nodes;
+	std::vector<yo::Node> encoder_input_nodes;
+	std::vector<yo::Node> decoder_input_nodes;
 	//输出相关
-	std::vector<Node> yolo_output_nodes;
-	std::vector<Node> encoder_output_nodes;
-	std::vector<Node> decoder_output_nodes;
+	std::vector<yo::Node> yolo_output_nodes;
+	std::vector<yo::Node> encoder_output_nodes;
+	std::vector<yo::Node> decoder_output_nodes;
 
 	std::vector<cv::Mat> input_images;
 

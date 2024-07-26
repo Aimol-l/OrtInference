@@ -58,8 +58,8 @@ int Yolov10::initialize(std::string onnx_path, bool is_cuda){
         Ort::TypeInfo input_type_info = this->session->GetInputTypeInfo(index);
         auto input_dims = input_type_info.GetTensorTypeAndShapeInfo().GetShape();
         //*****************
-        Node node;
-        for(size_t j=0;j<input_dims.size();j++) node.dim[j] = input_dims.at(j);
+        yo::Node node;
+        for(size_t j=0;j<input_dims.size();j++) node.dim.push_back(input_dims.at(j));
         char* name = input_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
         node.name = new char[name_length];
@@ -78,8 +78,8 @@ int Yolov10::initialize(std::string onnx_path, bool is_cuda){
         Ort::TypeInfo output_type_info = this->session->GetOutputTypeInfo(index);
         auto output_dims = output_type_info.GetTensorTypeAndShapeInfo().GetShape();
         //*****************
-        Node node;
-        for(size_t j=0;j<output_dims.size();j++) node.dim[j] = output_dims.at(j);
+        yo::Node node;
+        for(size_t j=0;j<output_dims.size();j++) node.dim.push_back(output_dims.at(j));
         char* name = output_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
         node.name = new char[name_length];

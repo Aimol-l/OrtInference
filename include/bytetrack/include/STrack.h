@@ -8,10 +8,9 @@ using namespace std;
 
 enum TrackState { New = 0, Tracked, Lost, Removed };
 
-class STrack
-{
+class STrack{
 public:
-	STrack(vector<float> tlwh_, float score);
+	STrack(vector<float> tlwh_, float score,int label_id);
 	~STrack();
 
 	vector<float> static tlbr_to_tlwh(vector<float> &tlbr);
@@ -32,6 +31,7 @@ public:
 public:
 	bool is_activated;
 	int track_id;
+	int label_id;
 	int state;
 
 	vector<float> _tlwh;

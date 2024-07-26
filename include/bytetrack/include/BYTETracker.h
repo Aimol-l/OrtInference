@@ -2,8 +2,7 @@
 
 #include "STrack.h"
 
-struct Object
-{
+struct Object{
     cv::Rect_<float> rect;
     int label;
     float prob;

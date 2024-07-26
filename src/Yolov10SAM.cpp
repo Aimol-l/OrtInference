@@ -140,7 +140,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
         Ort::TypeInfo input_type_info = this->yolo_session->GetInputTypeInfo(index);
         auto input_dims = input_type_info.GetTensorTypeAndShapeInfo().GetShape();
         //*****************
-        Node node;
+        yo::Node node;
         for(size_t j=0;j<input_dims.size();j++) node.dim.push_back(input_dims.at(j));
         char* name = input_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
@@ -151,7 +151,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
     //-------------------------------获取Encoder输入节点的信息------------------
     for (size_t index = 0; index < encoder_input_num; index++) {
         Ort::AllocatedStringPtr input_name_Ptr = this->encoder_session->GetInputNameAllocated(index, allocator);
-        Node node;
+        yo::Node node;
         node.dim = {1,3,-1,-1};
         char* name = input_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
@@ -162,7 +162,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
     //-------------------------------获取Decoder输入节点的信息------------------
       for (size_t index = 0; index < decoder_input_num; index++) {
         Ort::AllocatedStringPtr input_name_Ptr = this->decoder_session->GetInputNameAllocated(index, allocator);
-        Node node;
+        yo::Node node;
         if(index == 0) node.dim = {1,256,64,64};
         if(index == 1) node.dim = {1,1,2,2};
         if(index == 2) node.dim = {1,1,2};
@@ -184,7 +184,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
         Ort::TypeInfo output_type_info = this->yolo_session->GetOutputTypeInfo(index);
         auto output_dims = output_type_info.GetTensorTypeAndShapeInfo().GetShape();
         //*****************
-        Node node;
+        yo::Node node;
         for(size_t j = 0;j<output_dims.size();j++) node.dim.push_back(output_dims.at(j));
         char* name = output_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
@@ -195,7 +195,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
     //-------------------------------获取Encoder输出节点的信息------------------
     for (size_t index = 0; index < encoder_output_num; index++) {
         Ort::AllocatedStringPtr output_name_Ptr = this->encoder_session->GetOutputNameAllocated(index, allocator);
-        Node node;
+        yo::Node node;
         node.dim = {1,256,64,64};
         char* name = output_name_Ptr.get();
         size_t name_length = strlen(name) + 1;
@@ -207,7 +207,7 @@ int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
     //-------------------------------获取Decoder输出节点的信息------------------
      for (size_t index = 0; index < decoder_output_num; index++) {
         Ort::AllocatedStringPtr output_name_Ptr = this->decoder_session->GetOutputNameAllocated(index, allocator);
-        Node node;
+        yo::Node node;
         if(index == 0) node.dim = {1,1,3,-1,-1};
         if(index == 1) node.dim = {1,1,3};
         if(index == 2) node.dim = {1,3,256,256};

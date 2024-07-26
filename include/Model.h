@@ -19,10 +19,13 @@ const static std::map<int,std::string>  LABEL = {
         {72,"refrigerator"},{73,"book"},{74,"clock"},{75,"vase"},{76,"scissors"},{77,"teddy bear"},{78,"hair drier"},{79,"toothbrush"}
     };
 
+namespace yo{
+
 struct Node{
     std::vector<int64_t> dim; // batch,channel,height,width
     char* name = nullptr;
 };
+
 
 class Model{
 public:
@@ -33,3 +36,5 @@ protected:
     virtual void preprocess(cv::Mat &image)=0;
     virtual void postprocess(std::vector<Ort::Value>& output_tensors)=0;
 };
+
+}

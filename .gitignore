@@ -11,4 +11,5 @@ CTestTestfile.cmake
 _deps
 bin/*
 build/*
+assets/video/*
 assets/output/*
