@@ -49,7 +49,6 @@ protected:
     std::vector<cv::Rect> yolo_infer(std::vector<Ort::Value>&);
 	std::vector<Ort::Value> encoder_infer(std::vector<Ort::Value>&);
 	std::vector<Ort::Value> decoder_infer(std::vector<Ort::Value>&);
-	std::vector<std::vector<float>> gen_decoder_input(std::vector<cv::Rect>&);
 public:
     Yolov10SAM(){};
 	Yolov10SAM(const Yolov10SAM&) = delete;// 删除拷贝构造函数

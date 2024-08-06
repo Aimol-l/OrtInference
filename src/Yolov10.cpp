@@ -123,10 +123,8 @@ int Yolov10::inference(cv::Mat &image){
 
     // 推理
     std::vector<const char*> input_names,output_names;
-    for(int i = 0;i<this->input_nodes.size();i++)
-        input_names.push_back(this->input_nodes[i].name);
-    for(int i = 0;i<this->input_nodes.size();i++)
-        output_names.push_back(this->output_nodes[i].name);
+    for(int i = 0;i<this->input_nodes.size();i++) input_names.push_back(this->input_nodes[i].name);
+    for(int i = 0;i<this->output_nodes.size();i++) output_names.push_back(this->output_nodes[i].name);
     std::vector<Ort::Value> output_tensors;
     try {
         output_tensors = this->session->Run(
