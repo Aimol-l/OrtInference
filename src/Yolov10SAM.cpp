@@ -331,7 +331,7 @@ int Yolov10SAM::inference(cv::Mat &image){
     );
     Ort::Value image_embeddings = std::move(this->encoder_infer(encoder_input_tensor).at(0));
     //*******************************decoder推理***********************************
-     std::vector<std::vector<float>> points_cord;
+    std::vector<std::vector<float>> points_cord;
     for(auto &box:boxes){
         std::vector<float> point_val{(float)box.x,(float)box.y,(float)box.x+box.width,(float)box.y+box.height};//xyxy
         points_cord.emplace_back(point_val);

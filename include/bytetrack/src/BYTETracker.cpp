@@ -16,8 +16,7 @@ BYTETracker::~BYTETracker()
 {
 }
 
-vector<STrack> BYTETracker::update(const vector<Object>& objects)
-{
+vector<STrack> BYTETracker::update(const vector<Object>& objects){
 
 	////////////////// Step 1: Get detections //////////////////
 	this->frame_id++;

@@ -17,8 +17,9 @@ private:
 
     //Env
     Ort::Env yolo_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"yolov10sam");
-	Ort::Env encoder_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"sam_encoder");;
-	Ort::Env decoder_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"sam_decoder");;
+	Ort::Env encoder_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"sam_encoder");
+	Ort::Env decoder_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"sam_decoder");
+	
 	//onnx会话配置相关
 	Ort::Session* yolo_session = nullptr;
 	Ort::Session* encoder_session = nullptr;

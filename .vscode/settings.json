@@ -82,6 +82,7 @@
         "strstream": "cpp",
         "cfenv": "cpp",
         "coroutine": "cpp",
-        "hash_map": "cpp"
+        "hash_map": "cpp",
+        "forward_list": "cpp"
     }
 }

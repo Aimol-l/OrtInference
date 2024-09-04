@@ -1,9 +1,9 @@
 #include <iostream>
 #include <filesystem>
+#include "SAM2.h"
 #include "Yolov10.h"
 #include "Yolov10SAM.h"
 #include "Yolov10Trace.h"
-#include "GroundDino.h"
 
 void yolo(){
     auto yolov10 = std::make_unique<Yolov10>();
@@ -107,12 +107,13 @@ void yolotrace(){
 }   
 
 
-void dino(){
-    auto dino = std::make_unique<GroundDino>();
+void sam2(){
+    auto sam2 = std::make_unique<SAM2>();
     
-    std::string onnx_path = "../models/grounded.onnx";
-    dino->initialize(onnx_path,true);
-    dino->setparms({.score=0.5f,.nms=0.8f,.prompt="biscuits"});
+    std::string onnx_path = "../models/ESAM_encoder.onnx|../models/ESAM_deocder.onnx";
+    sam2->initialize(onnx_path,true);
+    sam2->setparms({.score=0.5f,.nms=0.8f});
+    
     std::string folder_path = "../assets/images/*.png";
     std::string output_path = "../assets/output/";
 
@@ -123,15 +124,15 @@ void dino(){
         std::println("path={}",path);
         cv::Mat image = cv::imread(path);
         auto start = std::chrono::high_resolution_clock::now();
-        int r = dino->inference(image);
+        int r = sam2->inference(image);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("duration = {}ms",duration);
         if(r){
             auto filename = std::filesystem::path(path).filename().string();
             // cv::imwrite(output_path+filename,image);
-            cv::imshow("Image", image);
-            cv::waitKey(0);
+            // cv::imshow("Image", image);
+            // cv::waitKey(0);
         }else{
             std::println("inference error!!!");
             continue;
@@ -142,7 +143,7 @@ int main(int argc, char const *argv[]){
     // yolo();
     // yolosam();
     // yolotrace();
-    dino();
+    // sam2();
     return 0;   
 }
 
