@@ -3,8 +3,17 @@
 #include <fstream>
 #include <print>
 
-
 class SAM2:public yo::Model{
+
+struct InferenceStatus{
+    size_t current_frame = 0;
+    Ort::Value obj_ptr_first;
+    std::vector<Ort::Value> obj_ptr_recent;
+
+};
+struct Params_sam2{
+    size_t buffer_size = 15;
+};
 private:
     bool is_inited = false;
     cv::Mat* ori_img = nullptr;
@@ -40,15 +49,27 @@ private:
 	std::vector<yo::Node> img_decoder_output_nodes;
 	std::vector<yo::Node> mem_attention_output_nodes;
     std::vector<yo::Node> mem_encoder_output_nodes;
+
+    // 推理过程tensors
+    std::vector<Ort::Value> img_encoder_out;
+    std::vector<Ort::Value> img_decoder_out;
+    std::vector<Ort::Value> mem_attention_out;
+    std::vector<Ort::Value> mem_encoder_out;
 protected:
     void preprocess(cv::Mat &image) override;
     void postprocess(std::vector<Ort::Value>& output_tensors) override;
     std::vector<std::string> str_split(const std::string& str, char delimiter);
 
-    std::vector<Ort::Value> img_encoder_infer(std::vector<Ort::Value>&);
-    std::vector<Ort::Value> img_decoder_infer(std::vector<Ort::Value>&);
-    std::vector<Ort::Value> mem_attention_infer(std::vector<Ort::Value>&);
-    std::vector<Ort::Value> mem_encoder_infer(std::vector<Ort::Value>&);
+
+    std::vector<Ort::Value> build_img_decoder_input();
+    std::vector<Ort::Value> build_mem_encoder_input();
+    std::vector<Ort::Value> build_mem_attention_input();
+
+
+    void img_encoder_infer(std::vector<Ort::Value>&);
+    void img_decoder_infer();
+    void mem_attention_infer();
+    void mem_encoder_infer();
 public:
     SAM2();
     ~SAM2();

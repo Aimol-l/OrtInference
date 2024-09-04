@@ -9,7 +9,14 @@ std::vector<std::string> SAM2::str_split(const std::string& str, char delimiter)
     }
     return tokens;
 }
-int SAM2::initialize(std::string onnx_path, bool is_cuda){
+
+std::vector<Ort::Value> SAM2::build_mem_attention_input(){
+
+    return std::vector<Ort::Value>();
+}
+
+int SAM2::initialize(std::string onnx_path, bool is_cuda)
+{
     // 
     std::vector<std::string> onnx_paths = this->str_split(onnx_path,'|');
     assert(onnx_paths.size() == 4);
@@ -208,10 +215,17 @@ int SAM2::inference(cv::Mat &image){
         std::println("Image preprocess failed!");
         return -2;
     }
-    // 图片编码器
-    
-    // mem_attention
-
+    // 图片编码器，输入图片
+    std::vector<Ort::Value> img_encoder_tensor;
+    img_encoder_tensor.push_back(Ort::Value::CreateTensor<float>(
+                        memory_info,
+                        this->input_images[0].ptr<float>(),
+                        this->input_images[0].total(),
+                        this->img_encoder_input_nodes[0].dim.data(),
+                        this->img_encoder_input_nodes[0].dim.size())
+    );
+    this->img_encoder_infer(img_encoder_tensor);
+    this->mem_attention_infer();
     // 图片解码器
 
     // mem_encoder
@@ -220,6 +234,32 @@ int SAM2::inference(cv::Mat &image){
 
     return 0;
 }
+void SAM2::img_encoder_infer(std::vector<Ort::Value> & input_tensor){
+    std::vector<const char*> input_names,output_names;
+    for(auto &node:this->img_encoder_input_nodes)  input_names.push_back(node.name);
+    for(auto &node:this->img_encoder_output_nodes) output_names.push_back(node.name);
+    try {
+        this->img_encoder_out = this->img_encoder_session->Run(
+            Ort::RunOptions{ nullptr },
+            input_names.data(),  // images
+            input_tensor.data(), // 1*3*1024*1024
+            input_tensor.size(), // 1
+            output_names.data(), // output0
+            output_names.size()); // 1
+    }catch (const std::exception& e) {
+        std::println("ERROR: img_encoder_infer failed!!");
+    }
+}
+void SAM2::mem_attention_infer(){
+
+}
+void SAM2::mem_encoder_infer(){
+
+}
+void SAM2::img_decoder_infer(){
+
+}
+
 
 void SAM2::preprocess(cv::Mat &image){
     input_images.clear();
