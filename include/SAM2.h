@@ -6,18 +6,21 @@
 class SAM2:public yo::Model{
 
 struct InferenceStatus{
-    size_t current_frame = 0;
+    int32_t current_frame = 0;
     Ort::Value obj_ptr_first;
     std::vector<Ort::Value> obj_ptr_recent;
 
 };
-struct Params_sam2{
-    size_t buffer_size = 15;
+struct ParamsSam2{
+    int32_t buffer_size = 15;
+    cv::Rect prompt_box;
 };
 private:
     bool is_inited = false;
     cv::Mat* ori_img = nullptr;
     std::vector<cv::Mat> input_images;
+    ParamsSam2 parms;
+    InferenceStatus infer_status;
     Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,OrtMemTypeDefault);
 
     //Env
@@ -51,20 +54,16 @@ private:
     std::vector<yo::Node> mem_encoder_output_nodes;
 
     // 推理过程tensors
-    std::vector<Ort::Value> img_encoder_out;
-    std::vector<Ort::Value> img_decoder_out;
-    std::vector<Ort::Value> mem_attention_out;
-    std::vector<Ort::Value> mem_encoder_out;
+    std::vector<Ort::Value> img_encoder_out; // [pix_feat,high_res_feat0,high_res_feat1,vision_feats,vision_pos_embed]
+    std::vector<Ort::Value> img_decoder_out; // [obj_ptr,mask_for_mem,pred_mask]
+    std::vector<Ort::Value> mem_attention_out;//[image_embed]
+    std::vector<Ort::Value> mem_encoder_out; // [maskmem_features,]
 protected:
     void preprocess(cv::Mat &image) override;
     void postprocess(std::vector<Ort::Value>& output_tensors) override;
     std::vector<std::string> str_split(const std::string& str, char delimiter);
 
-
-    std::vector<Ort::Value> build_img_decoder_input();
-    std::vector<Ort::Value> build_mem_encoder_input();
     std::vector<Ort::Value> build_mem_attention_input();
-
 
     void img_encoder_infer(std::vector<Ort::Value>&);
     void img_decoder_infer();

@@ -1,6 +1,6 @@
 #include "Yolov10Trace.h"
 
-int Yolov10Trace::setparms(Params_trace parms){
+int Yolov10Trace::setparms(ParamsTrace parms){
     tracker = std::make_unique<BYTETracker>(parms.camera_fps,parms.buffer_size);
     this->parms = std::move(parms);
     return 1;

@@ -6,7 +6,7 @@
 
 class Yolov10Trace:public yo::Model{
 
-struct Params_trace{
+struct ParamsTrace{
     int camera_fps = 60;
     int buffer_size = 30;
     float score = 0.5f;
@@ -18,7 +18,7 @@ private:
     cv::Mat* ori_img = nullptr;
     std::unique_ptr<BYTETracker> tracker; // 多目标跟踪
     
-    Params_trace parms;
+    ParamsTrace parms;
     std::vector<yo::Node> input_nodes;
     std::vector<yo::Node> output_nodes;
     std::vector<cv::Mat> input_images;
@@ -35,7 +35,7 @@ public:
     Yolov10Trace(const Yolov10Trace&) = delete;// 删除拷贝构造函数
     Yolov10Trace& operator=(const Yolov10Trace&) = delete;// 删除赋值运算符
     ~Yolov10Trace(){if(session != nullptr) delete session;};
-    int setparms(Params_trace parms);
+    int setparms(ParamsTrace parms);
     int initialize(std::string onnx_path, bool is_cuda);
     int inference(cv::Mat &image);
     

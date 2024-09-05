@@ -6,7 +6,7 @@
 
 class Yolov10:public yo::Model{
 
-struct Params_v10{
+struct ParamsV10{
     float score = 0.5f;
     float nms = 0.5f;
 };
@@ -15,7 +15,7 @@ private:
     bool is_inited = false;
     cv::Mat* ori_img = nullptr;
 
-    Params_v10 parms;
+    ParamsV10 parms;
     std::vector<yo::Node> input_nodes;
     std::vector<yo::Node> output_nodes;
     std::vector<cv::Mat> input_images;
@@ -32,7 +32,7 @@ public:
     Yolov10(const Yolov10&) = delete;// 删除拷贝构造函数
     Yolov10& operator=(const Yolov10&) = delete;// 删除赋值运算符
     ~Yolov10(){if(session != nullptr) delete session;};
-    int setparms(Params_v10 parms);
+    int setparms(ParamsV10 parms);
     int initialize(std::string onnx_path, bool is_cuda);
     int inference(cv::Mat &image);
     

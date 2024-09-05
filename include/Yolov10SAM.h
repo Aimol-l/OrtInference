@@ -5,7 +5,7 @@
 
 class Yolov10SAM:public yo::Model{
 
-struct Params_sam{
+struct ParamsSam{
     float score = 0.5f;
     float nms = 0.5f;
 };
@@ -13,7 +13,7 @@ struct Params_sam{
 private:
     bool is_inited = false;
     cv::Mat* ori_img = nullptr;
-    Params_sam parms;
+    ParamsSam parms;
 
     //Env
     Ort::Env yolo_env = Ort::Env(ORT_LOGGING_LEVEL_WARNING,"yolov10sam");
@@ -59,7 +59,7 @@ public:
 		if (encoder_session != nullptr) delete encoder_session;
 		if (decoder_session != nullptr) delete decoder_session;
     };
-    int setparms(Params_sam parms);
+    int setparms(ParamsSam parms);
     int initialize(std::string onnx_path, bool is_cuda);
     int inference(cv::Mat &image);
     

@@ -1,6 +1,6 @@
 #include "Yolov10.h"
 
-int Yolov10::setparms(Params_v10 parms){
+int Yolov10::setparms(ParamsV10 parms){
     this->parms = std::move(parms);
     return 1;
 }

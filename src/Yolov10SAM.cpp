@@ -44,7 +44,7 @@ void Yolov10SAM::postprocess(std::vector<Ort::Value> &output_tensors){
     cv::addWeighted(output_mask,0.65,*ori_img,1,0,*ori_img);
 }
 
-int Yolov10SAM::setparms(Params_sam parms){
+int Yolov10SAM::setparms(ParamsSam parms){
     this->parms = std::move(parms);
     return 1;
 }
