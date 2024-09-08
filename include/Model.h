@@ -35,4 +35,36 @@ protected:
     virtual void postprocess(std::vector<Ort::Value>& output_tensors)=0;
 };
 
+// 没考虑线程安全的问题
+// 环形队列
+template <typename T, size_t N>
+class FixedSizeQueue {
+private:
+    std::vector<T> data;
+    size_t head;
+    size_t tail;
+    size_t count;
+public:
+    FixedSizeQueue() : data(N), head(0), tail(0), count(0) {}
+    bool push(T&& value) {
+        if (isFull())
+            tail = (tail + 1) % N;  // Overwrite oldest element
+        else 
+            count++;
+        data[head] = std::move(value);
+        head = (head + 1) % N;
+        return true;
+    }
+    bool push(const T& value) {
+        return push(T(value));  // Create a copy and use the rvalue overload
+    }
+    T& at(size_t idx){
+        if(idx >=this->count)
+            throw std::out_of_range("Index out of range");
+        return data[(tail + idx) % N];
+    }
+    bool empty() const {return count == 0;}
+    bool full() const {return count == N;}
+    size_t size() const {return count;}
+};
 }

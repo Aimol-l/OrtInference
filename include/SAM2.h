@@ -5,14 +5,19 @@
 
 class SAM2:public yo::Model{
 
+static const size_t BUFFER_SIZE = 15;
+
+struct SubStatus{
+    Ort::Value maskmem_features;
+    Ort::Value maskmem_pos_enc;
+};
 struct InferenceStatus{
     int32_t current_frame = 0;
     Ort::Value obj_ptr_first;
-    std::vector<Ort::Value> obj_ptr_recent;
-
+    yo::FixedSizeQueue<SubStatus,7> status_recent;
+    yo::FixedSizeQueue<Ort::Value,BUFFER_SIZE> obj_ptr_recent;
 };
 struct ParamsSam2{
-    int32_t buffer_size = 15;
     cv::Rect prompt_box;
 };
 private:
@@ -57,7 +62,7 @@ private:
     std::vector<Ort::Value> img_encoder_out; // [pix_feat,high_res_feat0,high_res_feat1,vision_feats,vision_pos_embed]
     std::vector<Ort::Value> img_decoder_out; // [obj_ptr,mask_for_mem,pred_mask]
     std::vector<Ort::Value> mem_attention_out;//[image_embed]
-    std::vector<Ort::Value> mem_encoder_out; // [maskmem_features,]
+    std::vector<Ort::Value> mem_encoder_out; // [maskmem_features,maskmem_pos_enc,temporal_code]
 protected:
     void preprocess(cv::Mat &image) override;
     void postprocess(std::vector<Ort::Value>& output_tensors) override;

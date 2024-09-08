@@ -97,6 +97,8 @@
         "hash_set": "cpp",
         "*.expression": "cpp",
         "alignedvector3": "cpp",
-        "fft": "cpp"
+        "fft": "cpp",
+        "__hash_table": "cpp",
+        "__tree": "cpp"
     }
 }
