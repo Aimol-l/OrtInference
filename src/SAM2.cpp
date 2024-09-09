@@ -220,7 +220,7 @@ int SAM2::inference(cv::Mat &image){
                         this->img_encoder_input_nodes[0].dim.size())
     );
     this->img_encoder_infer(img_encoder_tensor);
-    this->mem_attention_infer();
+    this->mem_attention_infer(); // 第0帧的时候似乎没有进行推理
     this->img_decoder_infer();
     this->mem_encoder_infer();
     // 后处理
@@ -234,8 +234,8 @@ int SAM2::inference(cv::Mat &image){
     }
     return 0;
 }
+// [num_obj_ptr, current_vision_feat, current_vision_pos_embed, memory_0,memory_1, memory_pos_embed]->[image_embed]
 std::vector<Ort::Value> SAM2::build_mem_attention_input(){
-    // [num_obj_ptr, current_vision_feat, current_vision_pos_embed, memory_0,memory_1, memory_pos_embed]->[image_embed]
     std::vector<Ort::Value> input_tensor(5);
     input_tensor[0] = Ort::Value::CreateTensor<int32_t>(
                             memory_info,
@@ -245,87 +245,79 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
                             this->mem_attention_input_nodes[0].dim.size());
     input_tensor[1] = std::move(this->img_encoder_out[3]); //current_vision_feat
     input_tensor[2] = std::move(this->img_encoder_out[4]); //current_vision_pos_embed
-    if(this->infer_status.current_frame == 0)[[__glibc_unlikely]]{
-        // memory
-        // input_tensor[3] = todo..
-        // input_tensor[4] = todo..
-        // memory_pos_embed
-        // input_tensor[5] = todo..
-    }else{
-        // 需要构造出 memory 和 memory_pos_embed
-        // memory是由obj_ptr_first，obj_ptr_recent和status_recent.maskmem_features 构造出的
-        size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...
-        std::vector<int64_t> dimensions_0{(int64_t)obj_buffer_size,256}; // [1,256]
-        float obj_ptrs[obj_buffer_size*256]; // first+recent
-        const float* tensor_data = infer_status.obj_ptr_first.GetTensorData<float>();
-        memcpy(obj_ptrs, tensor_data, 256 * sizeof(float)); // 只复制了一部分
-        for(size_t i = 0;i<infer_status.obj_ptr_recent.size();i++){
-            auto& temp_tensor = infer_status.obj_ptr_recent.at(i);
-            tensor_data = temp_tensor.GetTensorData<float>();
-            memcpy(obj_ptrs+256*(i+1), tensor_data, 256 * sizeof(float));
-        }
-        auto memory_0 = Ort::Value::CreateTensor<float>(
-                        memory_info,
-                        obj_ptrs,
-                        obj_buffer_size*256,
-                        dimensions_0.data(),
-                        dimensions_0.size()
-                        );
-        size_t features_size = infer_status.status_recent.size(); // 1,2,...
-        float maskmem_features[features_size*64*64*64]; // 申请内存
-        for(size_t i = 0;i<features_size;i++){
-            auto& temp_tensor = infer_status.status_recent.at(i).maskmem_features;
-            tensor_data = temp_tensor.GetTensorData<float>();
-            memcpy(maskmem_features+64*64*64*i, tensor_data, 64*64*64*sizeof(float));
-        }
-        std::vector<int64_t> dimensions_1{(int64_t)features_size,64,64,64}; // [1,64,64,64]
-        auto memory_1 = Ort::Value::CreateTensor<float>(
-                        memory_info,
-                        maskmem_features,
-                        features_size*64*64*64,
-                        dimensions_1.data(),
-                        dimensions_1.size()
-                        );
-        input_tensor[3] = std::move(memory_0);
-        input_tensor[4] = std::move(memory_1);
-
-        // memory_pos_embed是由两部分组成的。
-        const float* temporal_code_ = this->mem_encoder_out[2].GetTensorData<float>();// [7,1,1,64]
-        std::vector<const float*> temporal_code;
-        for(int i = 6;i>=0;i--){
-            auto temp = temporal_code_+i*64;
-            temporal_code.push_back(temp);
-        }
-        size_t maskmem_buffer_size = infer_status.status_recent.size()+1;// 至少会是2
-        size_t maskmem_pos_enc_size = (maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16))*64;
-        float maskmem_pos_enc[maskmem_pos_enc_size];
-        auto tensor_add = [&](float* a,const float* b,const float* c){
-            // b+c,结果保存到a
-            for(int i =0;i<4096;i++){
-                for(int j =0;j<64;j++){
-                    a[i*4096+j] = b[i*4096+j] + c[j];
-                }
-            }
-        };
-        // 第一部分：
-        for(size_t i = 0;i<infer_status.status_recent.size();i++){
-            auto sub = infer_status.status_recent.at(i).maskmem_pos_enc.GetTensorData<float>();//[4096,1,64]
-            tensor_add(maskmem_pos_enc,sub,temporal_code.at(i));
-        }
-        // 第二部分：
-        for(size_t i = 64*4*std::min(infer_status.current_frame,16);i<maskmem_pos_enc_size;i++){
-            maskmem_pos_enc[i] = 0.0f;
-        }
-        std::vector<int64_t> dimensions_3{int64_t(maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16)),1,64};
-        auto memory_pos_embed = Ort::Value::CreateTensor<float>(
-                            memory_info,
-                            maskmem_pos_enc,
-                            maskmem_pos_enc_size,
-                            dimensions_3.data(),
-                            dimensions_3.size()
-                            );
-        input_tensor[5] = std::move(memory_pos_embed);
+    // 需要构造出 memory 和 memory_pos_embed
+    // memory是由obj_ptr_first，obj_ptr_recent和status_recent.maskmem_features 构造出的
+    size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...
+    std::vector<int64_t> dimensions_0{(int64_t)obj_buffer_size,256}; // [1,256]
+    float obj_ptrs[obj_buffer_size*256]; // first+recent
+    const float* tensor_data = infer_status.obj_ptr_first.GetTensorData<float>();
+    memcpy(obj_ptrs, tensor_data, 256 * sizeof(float)); // 只复制了一部分
+    for(size_t i = 0;i<infer_status.obj_ptr_recent.size();i++){
+        auto& temp_tensor = infer_status.obj_ptr_recent.at(i);
+        tensor_data = temp_tensor.GetTensorData<float>();
+        memcpy(obj_ptrs+256*(i+1), tensor_data, 256 * sizeof(float));
     }
+    auto memory_0 = Ort::Value::CreateTensor<float>(
+                    memory_info,
+                    obj_ptrs,
+                    obj_buffer_size*256,
+                    dimensions_0.data(),
+                    dimensions_0.size()
+                    );
+    size_t features_size = infer_status.status_recent.size(); // 1,2,...
+    float maskmem_features[features_size*64*64*64]; // 申请内存
+    for(size_t i = 0;i<features_size;i++){
+        auto& temp_tensor = infer_status.status_recent.at(i).maskmem_features;
+        tensor_data = temp_tensor.GetTensorData<float>();
+        memcpy(maskmem_features+64*64*64*i, tensor_data, 64*64*64*sizeof(float));
+    }
+    std::vector<int64_t> dimensions_1{(int64_t)features_size,64,64,64}; // [1,64,64,64]
+    auto memory_1 = Ort::Value::CreateTensor<float>(
+                    memory_info,
+                    maskmem_features,
+                    features_size*64*64*64,
+                    dimensions_1.data(),
+                    dimensions_1.size()
+                    );
+    input_tensor[3] = std::move(memory_0);
+    input_tensor[4] = std::move(memory_1);
+
+    // memory_pos_embed是由两部分组成的。
+    const float* temporal_code_ = this->mem_encoder_out[2].GetTensorData<float>();// [7,1,1,64]
+    std::vector<const float*> temporal_code;
+    for(int i = 6;i>=0;i--){
+        auto temp = temporal_code_+i*64;
+        temporal_code.push_back(temp);
+    }
+    size_t maskmem_buffer_size = infer_status.status_recent.size()+1;// 至少会是2
+    size_t maskmem_pos_enc_size = (maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16))*64;
+    float maskmem_pos_enc[maskmem_pos_enc_size];
+    auto tensor_add = [&](float* a,const float* b,const float* c){
+        // b+c,结果保存到a
+        for(int i =0;i<4096;i++){
+            for(int j =0;j<64;j++){
+                a[i*4096+j] = b[i*4096+j] + c[j];
+            }
+        }
+    };
+    // 第一部分：
+    for(size_t i = 0;i<infer_status.status_recent.size();i++){
+        auto sub = infer_status.status_recent.at(i).maskmem_pos_enc.GetTensorData<float>();//[4096,1,64]
+        tensor_add(maskmem_pos_enc,sub,temporal_code.at(i));
+    }
+    // 第二部分：
+    for(size_t i = 64*4*std::min(infer_status.current_frame,16);i<maskmem_pos_enc_size;i++){
+        maskmem_pos_enc[i] = 0.0f;
+    }
+    std::vector<int64_t> dimensions_3{int64_t(maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16)),1,64};
+    auto memory_pos_embed = Ort::Value::CreateTensor<float>(
+                        memory_info,
+                        maskmem_pos_enc,
+                        maskmem_pos_enc_size,
+                        dimensions_3.data(),
+                        dimensions_3.size()
+                        );
+    input_tensor[5] = std::move(memory_pos_embed);
     return input_tensor;
 }
 // input [1,3,1024,1024]
@@ -361,6 +353,10 @@ void SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
 // output:
 //      image_embed     [1,256,64,64]
 void SAM2::mem_attention_infer(){
+    if(infer_status.current_frame == 0) [[__glibc_unlikely]]{
+        this->mem_attention_out.push_back(std::move(this->img_encoder_out[3]));
+        return;
+    }
     //创建输入数据
     auto input_tensor = build_mem_attention_input();
     std::vector<const char*> input_names,output_names;
