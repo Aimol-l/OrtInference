@@ -8,12 +8,12 @@ class SAM2:public yo::Model{
 static const size_t BUFFER_SIZE = 15;
 
 struct SubStatus{
-    Ort::Value maskmem_features;
-    Ort::Value maskmem_pos_enc;
+    std::vector<Ort::Value> maskmem_features;
+    std::vector<Ort::Value> maskmem_pos_enc;
 };
 struct InferenceStatus{
     int32_t current_frame = 0;
-    Ort::Value obj_ptr_first;
+    std::vector<Ort::Value> obj_ptr_first;
     yo::FixedSizeQueue<SubStatus,7> status_recent;
     yo::FixedSizeQueue<Ort::Value,BUFFER_SIZE> obj_ptr_recent;
 };
@@ -66,8 +66,6 @@ private:
 protected:
     void preprocess(cv::Mat &image) override;
     void postprocess(std::vector<Ort::Value>& output_tensors) override;
-    std::vector<std::string> str_split(const std::string& str, char delimiter);
-
     std::vector<Ort::Value> build_mem_attention_input();
 
     void img_encoder_infer(std::vector<Ort::Value>&);
@@ -75,8 +73,16 @@ protected:
     void mem_attention_infer();
     void mem_encoder_infer();
 public:
-    SAM2();
-    ~SAM2();
-    int initialize(std::string onnx_path, bool is_cuda) override ;
+    SAM2(){};
+    SAM2(const SAM2&) = delete;// 删除拷贝构造函数
+    SAM2& operator=(const SAM2&) = delete;// 删除赋值运算符
+    ~SAM2(){
+        if (img_encoder_session != nullptr) delete img_encoder_session;
+		if (img_decoder_session != nullptr) delete img_decoder_session;
+		if (mem_attention_session != nullptr) delete mem_attention_session;
+        if (mem_encoder_session != nullptr) delete mem_encoder_session;
+    };
+    int setparms(ParamsSam2 parms);
+    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda) override ;
     int inference(cv::Mat &image) override;
 };

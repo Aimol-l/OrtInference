@@ -33,7 +33,7 @@ public:
     Yolov10& operator=(const Yolov10&) = delete;// 删除赋值运算符
     ~Yolov10(){if(session != nullptr) delete session;};
     int setparms(ParamsV10 parms);
-    int initialize(std::string onnx_path, bool is_cuda);
+    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda);
     int inference(cv::Mat &image);
     
 };

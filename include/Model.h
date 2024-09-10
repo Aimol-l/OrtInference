@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <vector>
 #include <iostream>
 #include <functional>
@@ -29,7 +30,7 @@ class Model{
 public:
     virtual ~Model(){};
     virtual int inference(cv::Mat &image) = 0;
-    virtual int initialize(std::string onnx_path,bool is_cuda) = 0;
+    virtual int initialize(std::vector<std::string>& onnx_paths,bool is_cuda) = 0;
 protected:
     virtual void preprocess(cv::Mat &image)=0;
     virtual void postprocess(std::vector<Ort::Value>& output_tensors)=0;
@@ -45,13 +46,18 @@ private:
     size_t tail;
     size_t count;
 public:
-    FixedSizeQueue() : data(N), head(0), tail(0), count(0) {}
+    FixedSizeQueue():head(0), tail(0), count(0) {}
     bool push(T&& value) {
-        if (isFull())
+        if (this->full())
             tail = (tail + 1) % N;  // Overwrite oldest element
-        else 
-            count++;
-        data[head] = std::move(value);
+        else{
+            if(data.size()<N){
+                data.push_back(std::move(value));
+                count++;
+            }else{
+                data[head] = std::move(value);
+            }
+        } 
         head = (head + 1) % N;
         return true;
     }

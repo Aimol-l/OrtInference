@@ -49,21 +49,9 @@ int Yolov10SAM::setparms(ParamsSam parms){
     return 1;
 }
 
-std::vector<std::string> Yolov10SAM::str_split(const std::string& str, char delimiter) {
-    std::vector<std::string> tokens;
-    std::string token;
-    std::istringstream tokenStream(str);
-    while (std::getline(tokenStream, token, delimiter)) {
-        tokens.push_back(token);
-    }
-    return tokens;
-}
-
-int Yolov10SAM::initialize(std::string onnx_path, bool is_cuda){
+int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     // 约定顺序是 yolov10.onnx,encoder.onnx,decoder.onnx
-    std::vector<std::string> onnx_paths = this->str_split(onnx_path,'|');
     assert(onnx_paths.size() == 3);
-
     auto is_file = [](const std::string& filename) {
         std::ifstream file(filename.c_str());
         return file.good();

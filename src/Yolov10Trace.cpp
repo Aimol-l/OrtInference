@@ -6,12 +6,12 @@ int Yolov10Trace::setparms(ParamsTrace parms){
     return 1;
 }
 
-int Yolov10Trace::initialize(std::string onnx_path, bool is_cuda){
-    
+int Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     auto is_file = [](const std::string& filename) {
         std::ifstream file(filename.c_str());
         return file.good();
     };
+    std::string& onnx_path = onnx_paths[0];  
     if (!is_file(onnx_path)) {
         std::println("Model file dose not exist.file:{}",onnx_path);
         return -2;

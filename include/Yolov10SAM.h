@@ -45,8 +45,6 @@ private:
 protected:
     void preprocess(cv::Mat &image);
     void postprocess(std::vector<Ort::Value>& output_tensors);
-    std::vector<std::string> str_split(const std::string& str, char delimiter);
-
     std::vector<cv::Rect> yolo_infer(std::vector<Ort::Value>&);
 	std::vector<Ort::Value> encoder_infer(std::vector<Ort::Value>&);
 	std::vector<Ort::Value> decoder_infer(std::vector<Ort::Value>&);
@@ -60,7 +58,7 @@ public:
 		if (decoder_session != nullptr) delete decoder_session;
     };
     int setparms(ParamsSam parms);
-    int initialize(std::string onnx_path, bool is_cuda);
+    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda);
     int inference(cv::Mat &image);
     
 };
