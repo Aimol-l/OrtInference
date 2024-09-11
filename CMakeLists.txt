@@ -5,8 +5,8 @@ project(
     DESCRIPTION "YOLOv10+"
 )
 set(CMAKE_CXX_STANDARD 23) # 设置为C++ 23标准
-# set(CMAKE_BUILD_TYPE "Release" )
-set(CMAKE_BUILD_TYPE "Debug" )
+set(CMAKE_BUILD_TYPE "Release" )
+# set(CMAKE_BUILD_TYPE "Debug" )
 set(CMAKE_CXX_STANDARD_REQUIRED ON) # 强制要求使用C++23
 
 

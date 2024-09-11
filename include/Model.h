@@ -1,4 +1,5 @@
 #pragma once
+#include <print>
 #include <memory>
 #include <vector>
 #include <iostream>
@@ -48,9 +49,10 @@ private:
 public:
     FixedSizeQueue():head(0), tail(0), count(0) {}
     bool push(T&& value) {
-        if (this->full())
-            tail = (tail + 1) % N;  // Overwrite oldest element
-        else{
+        if (this->full()){
+            tail = (tail + 1) % N;
+            data[head] = std::move(value);
+        }else{
             if(data.size()<N){
                 data.push_back(std::move(value));
                 count++;
@@ -67,7 +69,8 @@ public:
     T& at(size_t idx){
         if(idx >=this->count)
             throw std::out_of_range("Index out of range");
-        return data[(tail + idx) % N];
+        idx = (tail + idx) % N;
+        return data[idx];
     }
     bool empty() const {return count == 0;}
     bool full() const {return count == N;}

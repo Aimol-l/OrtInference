@@ -127,12 +127,18 @@ void sam2(){
     std::cout << "视频的总帧数=" << capture.get(cv::CAP_PROP_FRAME_COUNT)<<std::endl;
     //************************************************************
     cv::Mat frame;
+    size_t idx = 0;
     while (true) {
         if (!capture.read(frame) || frame.empty()) break;
-        if(sam2->inference(frame)){
-            // cv::imshow("frame", frame);
-            // int key = cv::waitKey(1000);
-            // if (key == 'q' || key == 27) break;
+        auto start = std::chrono::high_resolution_clock::now();
+        auto r = sam2->inference(frame);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        std::println("frame = {},duration = {}ms",idx++,duration);
+        if(r){
+            cv::imshow("frame", frame);
+            int key = cv::waitKey(5);
+            if (key == 'q' || key == 27) break;
         }else{
             std::println("inference error!!!");
             break;

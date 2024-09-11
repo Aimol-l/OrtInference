@@ -214,16 +214,16 @@ int SAM2::inference(cv::Mat &image){
                         this->img_encoder_input_nodes[0].dim.size())
     );
     this->img_encoder_infer(img_encoder_tensor);
-    std::println("img_encoder_infer");
+    // std::println("img_encoder_infer");
 
     this->mem_attention_infer(); // 第0帧的时候似乎没有进行推理
-    std::println("mem_attention_infer");
+    // std::println("mem_attention_infer");
 
     this->img_decoder_infer();
-    std::println("img_decoder_infer");
+    // std::println("img_decoder_infer");
 
     this->mem_encoder_infer();
-    std::println("mem_encoder_infer");
+    // std::println("mem_encoder_infer");
 
     // 后处理
     std::vector<Ort::Value> output_tensors;
@@ -246,16 +246,15 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
     // memory是由obj_ptr_first，obj_ptr_recent和status_recent.maskmem_features 构造出的
     size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...
     std::vector<int64_t> dimensions_0{(int64_t)obj_buffer_size,256}; // [y,256]
-    float obj_ptrs[obj_buffer_size*256]; // first+recent
+    float* obj_ptrs = new float[obj_buffer_size*256]; // first+recent
     const float* tensor_data = infer_status.obj_ptr_first[0].GetTensorData<float>();
     memcpy(obj_ptrs, tensor_data, 256 * sizeof(float)); // 只复制了一部分
 
     for(size_t i = 0;i<infer_status.obj_ptr_recent.size();i++){
-        auto& temp_tensor = infer_status.obj_ptr_recent.at(obj_buffer_size-1-i);
+        auto& temp_tensor = infer_status.obj_ptr_recent.at(i);
         tensor_data = temp_tensor.GetTensorData<float>();
         memcpy(obj_ptrs+256*(i+1), tensor_data, 256 * sizeof(float));
     }
-
     auto memory_0 = Ort::Value::CreateTensor<float>(
                     memory_info,
                     obj_ptrs,
@@ -264,16 +263,17 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
                     dimensions_0.size()
                     );
     size_t features_size = infer_status.status_recent.size(); // 1,2,3,...,7
-    float maskmem_features[features_size*64*64*64]; // 申请内存
+    float* maskmem_features_ = new float[features_size*64*64*64]; // 申请内存
     for(size_t i = 0;i<features_size;i++){
-        auto& temp_tensor = infer_status.status_recent.at(i).maskmem_features;
+        auto& aaa = this->infer_status.status_recent.at(i);
+        auto& temp_tensor = aaa.maskmem_features;
         tensor_data = temp_tensor[0].GetTensorData<float>();
-        memcpy(maskmem_features+64*64*64*i, tensor_data, 64*64*64*sizeof(float));
+        memcpy(maskmem_features_+64*64*64*i, tensor_data, 64*64*64*sizeof(float));
     }
     std::vector<int64_t> dimensions_1{(int64_t)features_size,64,64,64}; // [x,64,64,64]
     auto memory_1 = Ort::Value::CreateTensor<float>(
                     memory_info,
-                    maskmem_features,
+                    maskmem_features_,
                     features_size*64*64*64,
                     dimensions_1.data(),
                     dimensions_1.size()
@@ -281,6 +281,8 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
     input_tensor.push_back(std::move(memory_0));
     input_tensor.push_back(std::move(memory_1));
 
+
+    //***********************************************************************
     // memory_pos_embed是由两部分组成的。
     const float* temporal_code_ = this->mem_encoder_out[2].GetTensorData<float>();// [7,1,1,64]
     std::vector<const float*> temporal_code;
@@ -290,32 +292,33 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
     }
     size_t maskmem_buffer_size = infer_status.status_recent.size();
     size_t maskmem_pos_enc_size = (maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16))*64;
-    float maskmem_pos_enc[maskmem_pos_enc_size];
-
+    
+    float* maskmem_pos_enc_ = new float[maskmem_pos_enc_size];// 1049600
+    
     // a[] , b[4096,1,64], c[1,1,64]
     auto tensor_add = [&](float* a,const float* b,const float* c){
         // b+c,结果保存到a
         for(int i =0;i<4096;i++){
             for(int j =0;j<64;j++){
-                a[i*4096+j] = b[i*4096+j] + c[j];
+                a[i*64+j] = b[i*64+j] + c[j];
             }
         }
     };
     // 第一部分：
-    for(size_t i = 0;i<infer_status.status_recent.size();i++){
-        auto& temp_tensor = infer_status.status_recent.at(i).maskmem_pos_enc;
+    for(size_t j = 0;j<maskmem_buffer_size;j++){
+        auto& temp_tensor = this->infer_status.status_recent.at(j).maskmem_pos_enc;
         auto sub = temp_tensor[0].GetTensorData<float>();//[4096,1,64]
-        tensor_add(maskmem_pos_enc,sub,temporal_code.at(i));
+        tensor_add(maskmem_pos_enc_+j*4096*64,sub,temporal_code.at(j));
     }
     // 第二部分：
     for(size_t i = maskmem_buffer_size*4096*64;i<maskmem_pos_enc_size;i++){
-        maskmem_pos_enc[i] = 0.0f;
+        maskmem_pos_enc_[i] = 0.0f;
     }
     // [z,1,64]
     std::vector<int64_t> dimensions_3{int64_t(maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16)),1,64};
     auto memory_pos_embed = Ort::Value::CreateTensor<float>(
                         memory_info,
-                        maskmem_pos_enc,
+                        maskmem_pos_enc_,
                         maskmem_pos_enc_size,
                         dimensions_3.data(),
                         dimensions_3.size()
@@ -478,9 +481,16 @@ void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
     std::println("postprocess");
     float* output =  output_tensors[0].GetTensorMutableData<float>();
     cv::Mat outimg(this->ori_img->size(),CV_32FC1,output);
-    cv::resize(outimg,outimg,cv::Size(1400,700));
-    cv::imshow("outimg",outimg);
-    cv::waitKey(0);
+    cv::Mat dst;
+    outimg.convertTo(dst, CV_8UC1, 255);
+    cv::threshold(dst,dst,0,255,cv::THRESH_BINARY);
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+    cv::morphologyEx(dst, dst, cv::MORPH_OPEN, element);
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(dst, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+    cv::drawContours(*ori_img, contours, -1, cv::Scalar(50,250,20),1,cv::LINE_AA);
+    // cv::imshow("*ori_img",*ori_img);
+    // cv::waitKey(0);
 }
 int SAM2::setparms(ParamsSam2 parms){
     this->parms = std::move(parms);

@@ -1,7 +1,6 @@
 #pragma once
 #include "Model.h"
 #include <fstream>
-#include <print>
 
 class SAM2:public yo::Model{
 
