@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15) #设置cmake最低要求
 project(
     main      #项目名称
     LANGUAGES CXX C     #编程语言
-    DESCRIPTION "YOLOv10+"
+    DESCRIPTION "模型推理集合"
 )
 set(CMAKE_CXX_STANDARD 23) # 设置为C++ 23标准
 set(CMAKE_BUILD_TYPE "Release" )
@@ -33,7 +33,6 @@ find_package(OpenCV REQUIRED)
 find_package(onnxruntime REQUIRED)
 
 add_executable(${CMAKE_PROJECT_NAME} ${SRC_FILES})
-
 
 target_link_libraries(${CMAKE_PROJECT_NAME} TBB::tbb)
 target_link_libraries(${CMAKE_PROJECT_NAME} onnxruntime)

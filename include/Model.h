@@ -4,6 +4,7 @@
 #include <vector>
 #include <iostream>
 #include <functional>
+#include <expected>
 #include <tbb/tbb.h>
 #include <opencv2/opencv.hpp>
 #include <onnxruntime/onnxruntime_cxx_api.h>
@@ -30,8 +31,8 @@ struct Node{
 class Model{
 public:
     virtual ~Model(){};
-    virtual int inference(cv::Mat &image) = 0;
-    virtual int initialize(std::vector<std::string>& onnx_paths,bool is_cuda) = 0;
+    virtual std::variant<bool,std::string> inference(cv::Mat &image) = 0;
+    virtual std::variant<bool,std::string> initialize(std::vector<std::string>& onnx_paths,bool is_cuda) = 0;
 protected:
     virtual void preprocess(cv::Mat &image)=0;
     virtual void postprocess(std::vector<Ort::Value>& output_tensors)=0;

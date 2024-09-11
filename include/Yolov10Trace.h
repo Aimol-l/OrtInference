@@ -36,7 +36,7 @@ public:
     Yolov10Trace& operator=(const Yolov10Trace&) = delete;// 删除赋值运算符
     ~Yolov10Trace(){if(session != nullptr) delete session;};
     int setparms(ParamsTrace parms);
-    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda);
-    int inference(cv::Mat &image);
+    std::variant<bool,std::string> initialize(std::vector<std::string>& onnx_paths, bool is_cuda)override;
+    std::variant<bool,std::string> inference(cv::Mat &image)override;
     
 };

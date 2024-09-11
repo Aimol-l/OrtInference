@@ -49,7 +49,7 @@ int Yolov10SAM::setparms(ParamsSam parms){
     return 1;
 }
 
-int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
+std::variant<bool,std::string> Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     // 约定顺序是 yolov10.onnx,encoder.onnx,decoder.onnx
     assert(onnx_paths.size() == 3);
     auto is_file = [](const std::string& filename) {
@@ -58,8 +58,7 @@ int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     };
     for (const auto& path : onnx_paths) {
         if (!is_file(path)) {
-            std::println("Model file dose not exist.file:{}",path);
-            return -2;
+            return std::format("Model file dose not exist.file:{}",path);
         }
     }
     this->yolo_options.SetIntraOpNumThreads(2); //设置线程数量
@@ -79,8 +78,8 @@ int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
             this->decoder_options.AppendExecutionProvider_CUDA(options);
             std::println("Using CUDA...");
         }catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
-            return -3;
+            std::string error(e.what());
+            return error;
         }
     }else {
         std::println("Using CPU...");
@@ -113,8 +112,7 @@ int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
         decoder_session = new Ort::Session(decoder_env, (const char*)onnx_paths[2].c_str(), this->decoder_options);
 #endif
     }catch (const std::exception& e) {
-        std::println("Failed to load model. Please check your onnx file!");
-        return -4;
+        return std::format("Failed to load model. Please check your onnx file!");
     }
     //**************************************************************
     Ort::AllocatorWithDefaultOptions allocator;
@@ -258,7 +256,7 @@ int Yolov10SAM::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     //*********************************************************************
     this->is_inited = true;
     std::println("initialize ok!!");
-    return 1;
+    return true;
 }
 
 void Yolov10SAM::preprocess(cv::Mat &image){
@@ -284,16 +282,15 @@ void Yolov10SAM::preprocess(cv::Mat &image){
 }
 
 
-int Yolov10SAM::inference(cv::Mat &image){
-    if (image.empty() || !is_inited) return -1;
+std::variant<bool,std::string> Yolov10SAM::inference(cv::Mat &image){
+    if (image.empty() || !is_inited) return "image can not empyt!";
     this->ori_img = &image;
 
     // 图片预处理
     try {
         this->preprocess(image); 
      }catch (const std::exception& e) {
-        std::println("Image preprocess failed!");
-        return -2;
+        return "Image preprocess failed!";
     }
     // ******************************yolo推理**************************************
     std::vector<Ort::Value> yolo_input_tensor;
@@ -305,7 +302,7 @@ int Yolov10SAM::inference(cv::Mat &image){
                         this->yolo_input_nodes[0].dim.size())
     );
     std::vector<cv::Rect> boxes = this->yolo_infer(yolo_input_tensor);
-    if(boxes.empty()) return -1;
+    if(boxes.empty()) return "yolo can not detect any bbox!";
     // return 1;
     //*******************************encoder推理***********************************
     this->encoder_input_nodes[0].dim = {1,3,image.rows,image.cols};
@@ -367,17 +364,15 @@ int Yolov10SAM::inference(cv::Mat &image){
             output_tensors.emplace_back(std::move(this->decoder_infer(input_tensors).at(0)));
         }
     }catch (const std::exception& e) {
-        std::println("decoder_infer  failed!!");
-        return -4;
+        return "decoder_infer  failed!!";
     }
     //***********************输出后处理**************************************
     try {
         this->postprocess(output_tensors);
     }catch (const std::exception& e) {
-        std::println("tensor postprocess failed!!");
-        return -4;
+        return "tensor postprocess failed!!";
     }
-    return 1;
+    return true;
 }
 std::vector<cv::Rect> Yolov10SAM::yolo_infer(std::vector<Ort::Value> &input_tensor){
     std::vector<const char*> input_names,output_names;
@@ -435,9 +430,9 @@ std::vector<cv::Rect> Yolov10SAM::yolo_infer(std::vector<Ort::Value> &input_tens
     for(const auto i:indices){
         std::string name = LABEL.at(labels[i]);
         std::size_t hash = std::hash<std::string>{}(name);
-        int r = (hash & 0xFF0000) >> 16;
-        int g = (hash & 0x00FF00) >> 8;
-        int b = hash & 0x0000FF;
+        double r = (hash & 0xFF0000) >> 16;
+        double g = (hash & 0x00FF00) >> 8;
+        double b = hash & 0x0000FF;
         ///**************************************************
         cv::rectangle(*ori_img,boxes[i],cv::Scalar{b,g,r},1);
         cv::putText(*ori_img,std::format("{}:{:.2f}",name,scores[i]),cv::Point{boxes[i].x,boxes[i].y-5}

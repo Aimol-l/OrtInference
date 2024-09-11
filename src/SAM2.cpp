@@ -1,6 +1,6 @@
 #include "SAM2.h"
 
-int SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
+std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     // image_encoder,memory_attention,image_encoder,memory_encoder
     assert(onnx_paths.size() == 4);
     auto is_file = [](const std::string& filename) {
@@ -8,10 +8,8 @@ int SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
         return file.good();
     };
     for (const auto& path : onnx_paths) {
-        if (!is_file(path)) {
-            std::println("Model file dose not exist.file:{}",path);
-            return -2;
-        }
+        if (!is_file(path))
+            return std::format("Model file dose not exist.file:{}",path);
     }
     this->img_encoder_options.SetIntraOpNumThreads(2); //设置线程数量
     this->img_decoder_options.SetIntraOpNumThreads(2); //设置线程数量
@@ -32,8 +30,8 @@ int SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
             this->mem_encoder_options.AppendExecutionProvider_CUDA(options);
             std::println("Using CUDA...");
         }catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
-            return -3;
+            std::string error(e.what());
+            return error;
         }
     }else {
         std::println("Using CPU...");
@@ -49,8 +47,7 @@ int SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
         mem_encoder_session = new Ort::Session(mem_encoder_env, (const char*)onnx_paths[3].c_str(), this->mem_encoder_options);
 #endif  
     }catch (const std::exception& e) {
-        std::println("Failed to load model. Please check your onnx file!");
-        return -4;
+        return std::format("Failed to load model. Please check your onnx file!");
     }
     //************************************************************
     Ort::AllocatorWithDefaultOptions allocator;
@@ -191,18 +188,17 @@ int SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     std::println("----------------------------------");
     this->is_inited = true;
     std::println("initialize ok!!");
-    return 1;
+    return true;
 }
 
-int SAM2::inference(cv::Mat &image){
-    if (image.empty() || !is_inited) return -1;
+std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
+    if (image.empty() || !is_inited) return "image can not empyt!";
     this->ori_img = &image;
     // 图片预处理
     try {
         this->preprocess(image); 
      }catch (const std::exception& e) {
-        std::println("Image preprocess failed!");
-        return -2;
+        return "Image preprocess failed!";
     }
     // 图片编码器，输入图片
     std::vector<Ort::Value> img_encoder_tensor;
@@ -213,17 +209,17 @@ int SAM2::inference(cv::Mat &image){
                         this->img_encoder_input_nodes[0].dim.data(),
                         this->img_encoder_input_nodes[0].dim.size())
     );
-    this->img_encoder_infer(img_encoder_tensor);
-    // std::println("img_encoder_infer");
+    auto result_0 = this->img_encoder_infer(img_encoder_tensor);
+    if(result_0.index() != 0) return std::get<std::string>(result_0);
 
-    this->mem_attention_infer(); // 第0帧的时候似乎没有进行推理
-    // std::println("mem_attention_infer");
+    auto result_1 =this->mem_attention_infer(); // 第0帧的时候没有进行推理
+    if(result_1.index() != 0) return std::get<std::string>(result_1);
 
-    this->img_decoder_infer();
-    // std::println("img_decoder_infer");
+    auto result_2 =this->img_decoder_infer();
+    if(result_2.index() != 0) return std::get<std::string>(result_2);
 
-    this->mem_encoder_infer();
-    // std::println("mem_encoder_infer");
+    auto result_3 =this->mem_encoder_infer();
+    if(result_3.index() != 0) return std::get<std::string>(result_3);
 
     // 后处理
     std::vector<Ort::Value> output_tensors;
@@ -231,11 +227,10 @@ int SAM2::inference(cv::Mat &image){
     try {
         this->postprocess(output_tensors);
     }catch (const std::exception& e) {
-        std::println("tensor postprocess failed!!");
-        return -4;
+        return "tensor postprocess failed!!";
     }
     this->infer_status.current_frame++;
-    return 1;
+    return true;
 }
 // [num_obj_ptr, current_vision_feat, current_vision_pos_embed, memory_0,memory_1, memory_pos_embed]->[image_embed]
 std::vector<Ort::Value> SAM2::build_mem_attention_input(){
@@ -333,7 +328,7 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
 //      high_res_feat1  [1,64,128,128]
 //      vision_feats    [1,256,64,64]
 //      vision_pos_embed [4096,1,256]
-void SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
+std::variant<bool,std::string> SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->img_encoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->img_encoder_output_nodes) output_names.push_back(node.name);
@@ -346,8 +341,10 @@ void SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
             output_names.data(), 
             output_names.size()); 
     }catch (const std::exception& e) {
-        std::println("ERROR: img_encoder_infer failed!!");
+        std::string error(e.what());
+        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
     }
+    return true;
 }
 
 // input:
@@ -358,10 +355,10 @@ void SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
 //      memory_pos_embed        [buff,1,64]
 // output:
 //      image_embed     [1,256,64,64]
-void SAM2::mem_attention_infer(){
-    if(infer_status.current_frame == 0) [[__glibc_unlikely]]{
+std::variant<bool,std::string> SAM2::mem_attention_infer(){
+    if(infer_status.current_frame == 0) [[unlikely]]{
         this->mem_attention_out.push_back(std::move(this->img_encoder_out[3]));
-        return;
+        return true;
     }
     //创建输入数据
     auto input_tensor = this->build_mem_attention_input();
@@ -377,8 +374,10 @@ void SAM2::mem_attention_infer(){
             output_names.data(),
             output_names.size());
     }catch (const std::exception& e) {
-        std::println("ERROR: mem_attention_infer failed!!");
+        std::string error(e.what());
+        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
     }
+    return true;
 }
 
 // input:
@@ -392,7 +391,7 @@ void SAM2::mem_attention_infer(){
 //      obj_ptr       [1,256]
 //      mask_for_mem  [1,1,1024,1024]
 //      pred_mask     [1,H,W]
-void SAM2::img_decoder_infer(){
+std::variant<bool,std::string> SAM2::img_decoder_infer(){
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->img_decoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->img_decoder_output_nodes) output_names.push_back(node.name);
@@ -427,14 +426,15 @@ void SAM2::img_decoder_infer(){
             output_names.data(),
             output_names.size()));
     }catch (const std::exception& e) {
-        std::println("ERROR: img_decoder_infer failed!!");
+        std::string error(e.what());
+        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
     }
     if(infer_status.current_frame == 0){
         infer_status.obj_ptr_first.push_back(std::move(this->img_decoder_out[0]));
     }else{
         infer_status.obj_ptr_recent.push(std::move(this->img_decoder_out[0]));
     }
-    // std::println("img_decoder_done!!!");
+    return true;
 }
 
 // input:
@@ -444,7 +444,7 @@ void SAM2::img_decoder_infer(){
 //      maskmem_features  [1,64,64,64]
 //      maskmem_pos_enc   [4096,1,64]
 //      temporal_code     [7,1,1,64]
-void SAM2::mem_encoder_infer(){
+std::variant<bool,std::string> SAM2::mem_encoder_infer(){
     std::vector<Ort::Value> input_tensor; // 2
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->mem_encoder_input_nodes)  input_names.push_back(node.name);
@@ -461,13 +461,15 @@ void SAM2::mem_encoder_infer(){
             output_names.data(),
             output_names.size());
     }catch (const std::exception& e) {
-        std::println("ERROR: mem_encoder_infer failed!!");
+        std::string error(e.what());
+        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
     }
     // 存储推理状态
     SubStatus temp;
     temp.maskmem_features.push_back(std::move(this->mem_encoder_out[0]));
     temp.maskmem_pos_enc.push_back(std::move(this->mem_encoder_out[1]));
     infer_status.status_recent.push(std::move(temp));
+    return true;
 }
 
 void SAM2::preprocess(cv::Mat &image){

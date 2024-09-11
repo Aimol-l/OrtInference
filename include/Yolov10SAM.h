@@ -58,7 +58,7 @@ public:
 		if (decoder_session != nullptr) delete decoder_session;
     };
     int setparms(ParamsSam parms);
-    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda);
-    int inference(cv::Mat &image);
+    std::variant<bool,std::string> initialize(std::vector<std::string>& onnx_paths, bool is_cuda)override;
+    std::variant<bool,std::string> inference(cv::Mat &image)override;
     
 };

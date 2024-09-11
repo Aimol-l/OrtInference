@@ -6,15 +6,14 @@ int Yolov10Trace::setparms(ParamsTrace parms){
     return 1;
 }
 
-int Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
+std::variant<bool,std::string> Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     auto is_file = [](const std::string& filename) {
         std::ifstream file(filename.c_str());
         return file.good();
     };
     std::string& onnx_path = onnx_paths[0];  
     if (!is_file(onnx_path)) {
-        std::println("Model file dose not exist.file:{}",onnx_path);
-        return -2;
+        return std::format("Model file dose not exist.file:{}",onnx_path);
     }
     this->session_options.SetIntraOpNumThreads(4);
     if (is_cuda) {
@@ -28,8 +27,8 @@ int Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda)
             session_options.AppendExecutionProvider_CUDA(options);
             std::println("Using CUDA...");
         }catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
-            return -3;
+            std::string error(e.what());
+            return error;
         }
     }else {
         std::println("Using CPU...");
@@ -47,8 +46,7 @@ int Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda)
         session = new Ort::Session(env, (const char*)onnx_path.c_str(), this->session_options);
 #endif
     }catch (const std::exception& e) {
-        std::println("Failed to load model. Please check your onnx file!");
-        return -4;
+        return std::format("Failed to load model. Please check your onnx file!");
     }
     //************************************************
     Ort::AllocatorWithDefaultOptions allocator;
@@ -94,11 +92,11 @@ int Yolov10Trace::initialize(std::vector<std::string>& onnx_paths, bool is_cuda)
     //************************************************
     this->is_inited = true;
     std::println("initialize ok!!");
-    return 1;
+    return true;
 }
 
-int Yolov10Trace::inference(cv::Mat &image){
-    if (image.empty() || !is_inited) return -1;
+std::variant<bool,std::string> Yolov10Trace::inference(cv::Mat &image){
+    if (image.empty() || !is_inited) return "image can not empyt!";
     this->ori_img = &image;
 
     // 图片预处理
@@ -107,8 +105,7 @@ int Yolov10Trace::inference(cv::Mat &image){
     try {
         this->preprocess(image); 
      }catch (const std::exception& e) {
-        std::println("Image preprocess failed!");
-        return -2;
+        return "Image preprocess failed!";
     }
 
     // 创建模型输入张量
@@ -138,17 +135,15 @@ int Yolov10Trace::inference(cv::Mat &image){
             output_names.data(), // output0
             output_names.size()); // 1
     }catch (const std::exception& e) {
-        std::println("forward model failed!!");
-        return -3;
+        return "forward model failed!!";
     }
     // 输出后处理
     try {
         this->postprocess(output_tensors);
     }catch (const std::exception& e) {
-        std::println("tensor postprocess failed!!");
-        return -4;
+        return "tensor postprocess failed!!";
     }
-    return 1;
+    return true;
 }
 
 void Yolov10Trace::preprocess(cv::Mat &image){
@@ -211,9 +206,9 @@ void Yolov10Trace::postprocess(std::vector<Ort::Value> &output_tensors){
     for(size_t i =0;i<output_stracks.size();i++){
         std::string name = LABEL.at(output_stracks[i].label_id);
         std::size_t hash = std::hash<std::string>{}(name);
-        int g = (hash & 0xFF0000) >> 16;
-        int r = (hash & 0x00FF00) >> 8;
-        int b = hash & 0x0000FF;
+        double g = (hash & 0xFF0000) >> 16;
+        double r = (hash & 0x00FF00) >> 8;
+        double b = hash & 0x0000FF;
         ///**************************************************
         std::vector<float> box = output_stracks[i].tlwh;
         int x = (int)box[0],y=(int)box[1],w=(int)box[2],h=(int)box[3];
@@ -221,6 +216,6 @@ void Yolov10Trace::postprocess(std::vector<Ort::Value> &output_tensors){
         cv::rectangle(*ori_img,cv::Rect{x,y,w,h},cv::Scalar{b,g,r},2);
         cv::putText(*ori_img,std::format("{}{}:{:.2f}",output_stracks[i].track_id,
             name,output_stracks[i].score),
-            cv::Point{box[0],box[1]-5},1,1.2,cv::Scalar{b,g,r});
+            cv::Point{x,y-5},1,1.2,cv::Scalar{b,g,r});
     }
 }

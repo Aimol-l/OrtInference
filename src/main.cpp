@@ -7,8 +7,13 @@
 
 void yolo(){
     auto yolov10 = std::make_unique<Yolov10>();
-    std::vector<std::string> onnx_paths{"../models/yolov10m.onnx"};
-    yolov10->initialize(onnx_paths,true);
+    std::vector<std::string> onnx_paths{"../models/yolov10/yolov10m.onnx"};
+    auto r = yolov10->initialize(onnx_paths,true);
+    if(r.index() != 0){
+        std::string error = std::get<std::string>(r);
+        std::println("错误：{}",error);
+        return;
+    }
     yolov10->setparms({.score=0.5f,.nms=0.8f});
     
     std::string folder_path = "../assets/input/*.jpg";
@@ -21,17 +26,18 @@ void yolo(){
         std::println("path={}",path);
         cv::Mat image = cv::imread(path);
         auto start = std::chrono::high_resolution_clock::now();
-        int r = yolov10->inference(image);
+        auto result = yolov10->inference(image);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("duration = {}ms",duration);
-        if(r){
+        if(result.index() == 0){
             auto filename = std::filesystem::path(path).filename().string();
             cv::imwrite(output_path+filename,image);
             cv::imshow("Image", image);
             cv::waitKey(0);
         }else{
-            std::println("inference error!!!");
+            std::string error = std::get<std::string>(result);
+            std::println("错误：{}",error);
             continue;
         }
     }
@@ -39,11 +45,16 @@ void yolo(){
 void yolosam(){
     auto yolov10sam = std::make_unique<Yolov10SAM>();
     std::vector<std::string> onnx_paths{
-        "../models/yolov10m.onnx",
-        "../models/ESAM_encoder.onnx",
-        "../models/ESAM_deocder.onnx"
+        "../models/yolov10/yolov10m.onnx",
+        "../models/sam/ESAM_encoder.onnx",
+        "../models/sam/ESAM_deocder.onnx"
     };
-    yolov10sam->initialize(onnx_paths,true);
+    auto r = yolov10sam->initialize(onnx_paths,true);
+    if(r.index() != 0){
+        std::string error = std::get<std::string>(r);
+        std::println("错误：{}",error);
+        return;
+    }
     yolov10sam->setparms({.score=0.5f,.nms=0.8f});
     
     std::string folder_path = "../assets/input/*.jpg";
@@ -56,26 +67,31 @@ void yolosam(){
         std::println("path={}",path);
         cv::Mat image = cv::imread(path);
         auto start = std::chrono::high_resolution_clock::now();
-        int r = yolov10sam->inference(image);
+        auto result = yolov10sam->inference(image);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("duration = {}ms",duration);
-        if(r){
+        if(result.index() == 0){
             auto filename = std::filesystem::path(path).filename().string();
             cv::imwrite(output_path+filename,image);
             cv::imshow("Image", image);
             cv::waitKey(0);
         }else{
-            std::println("inference error!!!");
+            std::string error = std::get<std::string>(result);
+            std::println("错误：{}",error);
             continue;
         }
     }
 }
 void yolotrace(){
     auto yolov10trace = std::make_unique<Yolov10Trace>();
-    std::vector<std::string> onnx_paths{"../models/yolov10m.onnx"};
-    yolov10trace->initialize(onnx_paths,true);
-
+    std::vector<std::string> onnx_paths{"../models/yolov10/yolov10m.onnx"};
+    auto r = yolov10trace->initialize(onnx_paths,true);
+    if(r.index() != 0){
+        std::string error = std::get<std::string>(r);
+        std::println("错误：{}",error);
+        return;
+    }
     std::string video_path = "../assets/video/test.mp4";
     cv::VideoCapture capture(video_path);
     if (!capture.isOpened()) return;
@@ -94,14 +110,15 @@ void yolotrace(){
     cv::Mat frame;
     while (true) {
         if (!capture.read(frame) || frame.empty()) break;
-
-        if(yolov10trace->inference(frame)){
+        auto result = yolov10trace->inference(frame);
+        if(result.index() == 0){
             cv::imshow("frame", frame);
             int key = cv::waitKey(10);
             if (key == 'q' || key == 27) break;
         }else{
-            std::println("inference error!!!");
-            continue;
+            std::string error = std::get<std::string>(result);
+            std::println("错误：{}",error);
+            break;
         }
     }
     capture.release();
@@ -114,7 +131,12 @@ void sam2(){
         "../models/sam2/image_decoder.onnx",
         "../models/sam2/memory_encoder.onnx"
     };
-    sam2->initialize(onnx_paths,true);
+    auto r = sam2->initialize(onnx_paths,true);
+    if(r.index() != 0){
+        std::string error = std::get<std::string>(r);
+        std::println("错误：{}",error);
+        return;
+    }
     sam2->setparms({.prompt_box = {430,751,90,270}}); // 在1024*1024图像上的
     
     std::string video_path = "../assets/video/test.mkv";
@@ -131,16 +153,17 @@ void sam2(){
     while (true) {
         if (!capture.read(frame) || frame.empty()) break;
         auto start = std::chrono::high_resolution_clock::now();
-        auto r = sam2->inference(frame);
+        auto result = sam2->inference(frame);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("frame = {},duration = {}ms",idx++,duration);
-        if(r){
+        if(result.index() == 0){
             cv::imshow("frame", frame);
             int key = cv::waitKey(5);
             if (key == 'q' || key == 27) break;
         }else{
-            std::println("inference error!!!");
+            std::string error = std::get<std::string>(result);
+            std::println("错误：{}",error);
             break;
         }
     }

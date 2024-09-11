@@ -5,15 +5,14 @@ int Yolov10::setparms(ParamsV10 parms){
     return 1;
 }
 
-int Yolov10::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
+std::variant<bool,std::string> Yolov10::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     auto is_file = [](const std::string& filename) {
         std::ifstream file(filename.c_str());
         return file.good();
     };
     std::string& onnx_path = onnx_paths[0];  
     if (!is_file(onnx_path)) {
-        std::println("Model file dose not exist.file:{}",onnx_path);
-        return -2;
+        return std::format("Model file dose not exist.file:{}",onnx_path);
     }
     this->session_options.SetIntraOpNumThreads(4);
     if (is_cuda) {
@@ -27,8 +26,8 @@ int Yolov10::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
             session_options.AppendExecutionProvider_CUDA(options);
             std::println("Using CUDA...");
         }catch (const std::exception& e) {
-            std::cerr << e.what() << '\n';
-            return -3;
+            std::string error(e.what());
+            return error;
         }
     }else {
         std::println("Using CPU...");
@@ -46,8 +45,7 @@ int Yolov10::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
         session = new Ort::Session(env, (const char*)onnx_path.c_str(), this->session_options);
 #endif
     }catch (const std::exception& e) {
-        std::println("Failed to load model. Please check your onnx file!");
-        return -4;
+        return std::format("Failed to load model. Please check your onnx file!");
     }
     //************************************************
     Ort::AllocatorWithDefaultOptions allocator;
@@ -93,11 +91,11 @@ int Yolov10::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
     //************************************************
     this->is_inited = true;
     std::println("initialize ok!!");
-    return 1;
+    return true;
 }
 
-int Yolov10::inference(cv::Mat &image){
-    if (image.empty() || !is_inited) return -1;
+std::variant<bool,std::string> Yolov10::inference(cv::Mat &image){
+    if (image.empty() || !is_inited) return "image can not empyt!";
     this->ori_img = &image;
 
     // 图片预处理
@@ -106,8 +104,7 @@ int Yolov10::inference(cv::Mat &image){
     try {
         this->preprocess(image); 
      }catch (const std::exception& e) {
-        std::println("Image preprocess failed!");
-        return -2;
+        return "Image preprocess failed!";
     }
 
     // 创建模型输入张量
@@ -135,17 +132,15 @@ int Yolov10::inference(cv::Mat &image){
             output_names.data(), // output0
             output_names.size()); // 1
     }catch (const std::exception& e) {
-        std::println("forward model failed!!");
-        return -3;
+        return "forward model failed!!";
     }
     // 输出后处理
     try {
         this->postprocess(output_tensors);
     }catch (const std::exception& e) {
-        std::println("tensor postprocess failed!!");
-        return -4;
+        return "tensor postprocess failed!!";
     }
-    return 1;
+    return true;
 }
 
 void Yolov10::preprocess(cv::Mat &image){
@@ -203,9 +198,9 @@ void Yolov10::postprocess(std::vector<Ort::Value> &output_tensors){
     for(const auto i:indices){
         std::string name = LABEL.at(labels[i]);
         std::size_t hash = std::hash<std::string>{}(name);
-        int r = (hash & 0xFF0000) >> 16;
-        int g = (hash & 0x00FF00) >> 8;
-        int b = hash & 0x0000FF;
+        double r = (hash & 0xFF0000) >> 16;
+        double g = (hash & 0x00FF00) >> 8;
+        double b = hash & 0x0000FF;
         ///**************************************************
         cv::rectangle(*ori_img,cv::Rect{boxes[i].x,boxes[i].y-20,boxes[i].width,20},cv::Scalar{25,255,188},-1);
         cv::rectangle(*ori_img,boxes[i],cv::Scalar{b,g,r},2);

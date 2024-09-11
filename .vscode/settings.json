@@ -85,6 +85,8 @@
         "text_encoding": "cpp",
         "print": "cpp",
         "csignal": "cpp",
-        "strstream": "cpp"
+        "strstream": "cpp",
+        "expected": "cpp",
+        "*.ipp": "cpp"
     }
 }

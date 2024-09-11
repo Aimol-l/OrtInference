@@ -67,10 +67,10 @@ protected:
     void postprocess(std::vector<Ort::Value>& output_tensors) override;
     std::vector<Ort::Value> build_mem_attention_input();
 
-    void img_encoder_infer(std::vector<Ort::Value>&);
-    void img_decoder_infer();
-    void mem_attention_infer();
-    void mem_encoder_infer();
+    std::variant<bool,std::string> img_encoder_infer(std::vector<Ort::Value>&);
+    std::variant<bool,std::string> img_decoder_infer();
+    std::variant<bool,std::string> mem_attention_infer();
+    std::variant<bool,std::string> mem_encoder_infer();
 public:
     SAM2(){};
     SAM2(const SAM2&) = delete;// 删除拷贝构造函数
@@ -82,6 +82,6 @@ public:
         if (mem_encoder_session != nullptr) delete mem_encoder_session;
     };
     int setparms(ParamsSam2 parms);
-    int initialize(std::vector<std::string>& onnx_paths, bool is_cuda) override ;
-    int inference(cv::Mat &image) override;
+    std::variant<bool,std::string> initialize(std::vector<std::string>& onnx_paths, bool is_cuda) override ;
+    std::variant<bool,std::string> inference(cv::Mat &image) override;
 };
