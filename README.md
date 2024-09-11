@@ -1,10 +1,13 @@
 # OrtInference
 使用 C++和onnxruntime框架进行多种任务的推理。
+
 目前完成：
-    + YoloV10 目标检测
-    + YoloV10 + SAM 检测出目标并进行分割出mask
-    + YoloV10 + ByteTrack 视频中多目标跟踪
-    + SAM2 视频的目标跟踪分割
+ + YoloV10 目标检测
+ + YoloV10 + SAM 检测出目标并进行分割出mask
+ + YoloV10 + ByteTrack 视频中多目标跟踪
+ + SAM2 视频的目标跟踪分割
+
+SAM2 所用的onnx文件，参考https://github.com/Aimol-l/SAM2Export
 
 ## 依赖
 + opencv >= 4.8,tested on 4.10
@@ -42,7 +45,11 @@ cmake .. && make && ../bin/./main
 ## 参考
 
 SAM：https://github.com/facebookresearch/segment-anything
+
 EfficientSAM： https://github.com/yformer/EfficientSAM
+
 YOLOv10：https://github.com/THU-MIG/yolov10
+
 SAM2Export：https://github.com/Aimol-l/SAM2Export
+
 SAM2：https://github.com/facebookresearch/segment-anything-2
