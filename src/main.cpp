@@ -126,10 +126,10 @@ void yolotrace(){
 void sam2(){
     auto sam2 = std::make_unique<SAM2>();
     std::vector<std::string> onnx_paths{
-        "../models/sam2/image_encoder.onnx",
-        "../models/sam2/memory_attention.onnx",
-        "../models/sam2/image_decoder.onnx",
-        "../models/sam2/memory_encoder.onnx"
+        "../models/sam2/small/image_encoder.onnx",
+        "../models/sam2/small/memory_attention.onnx",
+        "../models/sam2/small/image_decoder.onnx",
+        "../models/sam2/small/memory_encoder.onnx"
     };
     auto r = sam2->initialize(onnx_paths,true);
     if(r.index() != 0){
@@ -137,8 +137,9 @@ void sam2(){
         std::println("错误：{}",error);
         return;
     }
-    sam2->setparms({.prompt_box = {430,751,90,270}}); // 在1024*1024图像上的
-    
+    sam2->setparms({.prompt_box = {745,695,145,230}}); // 在原始图像上的box
+    // sam2->setparms({.prompt_box = {590,490,138,250}}); // 在原始图像上的box
+
     std::string video_path = "../assets/video/test.mkv";
     cv::VideoCapture capture(video_path);
     if (!capture.isOpened()) return;
@@ -158,6 +159,8 @@ void sam2(){
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("frame = {},duration = {}ms",idx++,duration);
         if(result.index() == 0){
+            std::string text = std::format("frame = {},fps={:.1f}",idx++,1000.0f/duration);
+            cv::putText(frame,text,cv::Point{30,40},1,2,cv::Scalar(0,0,255),2);
             cv::imshow("frame", frame);
             int key = cv::waitKey(5);
             if (key == 'q' || key == 27) break;

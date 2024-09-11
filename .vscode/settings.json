@@ -87,6 +87,15 @@
         "csignal": "cpp",
         "strstream": "cpp",
         "expected": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "__bit_reference": "cpp",
+        "__locale": "cpp",
+        "__split_buffer": "cpp",
+        "__threading_support": "cpp",
+        "__verbose_abort": "cpp",
+        "ios": "cpp",
+        "locale": "cpp",
+        "queue": "cpp",
+        "stack": "cpp"
     }
 }

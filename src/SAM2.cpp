@@ -396,7 +396,12 @@ std::variant<bool,std::string> SAM2::img_decoder_infer(){
     for(auto &node:this->img_decoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->img_decoder_output_nodes) output_names.push_back(node.name);
     std::vector<Ort::Value> input_tensor; // 6
-    auto& box = parms.prompt_box;
+    auto box = parms.prompt_box;
+    // 变化bbox比例
+    box.x = 1024*((float)box.x / ori_img->cols);
+    box.y = 1024*((float)box.y / ori_img->rows);
+    box.width = 1024*((float)box.width / ori_img->cols);
+    box.height = 1024*((float)box.height / ori_img->rows);
     std::vector<float>point_val{(float)box.x,(float)box.y,(float)box.x+box.width,(float)box.y+box.height};//xyxy
     std::vector<float> point_labels = {2,3};
     std::vector<int64> frame_size = {ori_img->rows,ori_img->cols};
@@ -480,7 +485,6 @@ void SAM2::preprocess(cv::Mat &image){
 }
 
 void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
-    std::println("postprocess");
     float* output =  output_tensors[0].GetTensorMutableData<float>();
     cv::Mat outimg(this->ori_img->size(),CV_32FC1,output);
     cv::Mat dst;
@@ -490,9 +494,29 @@ void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
     cv::morphologyEx(dst, dst, cv::MORPH_OPEN, element);
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(dst, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    cv::drawContours(*ori_img, contours, -1, cv::Scalar(50,250,20),1,cv::LINE_AA);
-    // cv::imshow("*ori_img",*ori_img);
-    // cv::waitKey(0);
+
+    int idx = -1;
+    cv::Rect min_dis_rect;
+    double min_dis = std::numeric_limits<double>::max();
+    // 计算与 A 中心距离最近的 bbox
+    for (size_t i = 0;i<contours.size();i++) {
+        cv::Rect bbox = cv::boundingRect(contours[i]);
+        cv::Point center(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
+        cv::Point A_center(parms.prompt_box.x + parms.prompt_box.width / 2, parms.prompt_box.y + parms.prompt_box.height / 2);
+        double distance = cv::norm(center - A_center);
+        if (distance < min_dis) {
+            min_dis = distance;
+            min_dis_rect = bbox;
+            idx = i;
+        }
+    }
+    if (!min_dis_rect.empty()) {
+        parms.prompt_box = min_dis_rect;
+        cv::drawContours(*ori_img, contours, idx, cv::Scalar(50,250,20),2,cv::LINE_AA);
+        cv::rectangle(*ori_img, parms.prompt_box,cv::Scalar(0,0,255),2);
+        // std::string text = std::format("frame= {}",this->infer_status.current_frame);
+        // cv::putText(*ori_img,text,cv::Point{20,40},1,2,cv::Scalar(0,0,255),2);
+    }
 }
 int SAM2::setparms(ParamsSam2 parms){
     this->parms = std::move(parms);
