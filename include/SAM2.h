@@ -9,6 +9,7 @@ static const size_t BUFFER_SIZE = 15;
 struct SubStatus{
     std::vector<Ort::Value> maskmem_features;
     std::vector<Ort::Value> maskmem_pos_enc;
+    std::vector<Ort::Value> temporal_code;
 };
 struct InferenceStatus{
     int32_t current_frame = 0;
@@ -56,21 +57,14 @@ private:
 	std::vector<yo::Node> img_decoder_output_nodes;
 	std::vector<yo::Node> mem_attention_output_nodes;
     std::vector<yo::Node> mem_encoder_output_nodes;
-
-    // 推理过程tensors
-    std::vector<Ort::Value> img_encoder_out; // [pix_feat,high_res_feat0,high_res_feat1,vision_feats,vision_pos_embed]
-    std::vector<Ort::Value> img_decoder_out; // [obj_ptr,mask_for_mem,pred_mask]
-    std::vector<Ort::Value> mem_attention_out;//[image_embed]
-    std::vector<Ort::Value> mem_encoder_out; // [maskmem_features,maskmem_pos_enc,temporal_code]
 protected:
     void preprocess(cv::Mat &image) override;
     void postprocess(std::vector<Ort::Value>& output_tensors) override;
-    std::vector<Ort::Value> build_mem_attention_input();
 
-    std::variant<bool,std::string> img_encoder_infer(std::vector<Ort::Value>&);
-    std::variant<bool,std::string> img_decoder_infer();
-    std::variant<bool,std::string> mem_attention_infer();
-    std::variant<bool,std::string> mem_encoder_infer();
+    std::variant<std::vector<Ort::Value>,std::string> img_encoder_infer(std::vector<Ort::Value>&);
+    std::variant<std::vector<Ort::Value>,std::string> img_decoder_infer(std::vector<Ort::Value>&);
+    std::variant<std::vector<Ort::Value>,std::string> mem_attention_infer(std::vector<Ort::Value>&);
+    std::variant<std::vector<Ort::Value>,std::string> mem_encoder_infer(std::vector<Ort::Value>&);
 public:
     SAM2(){};
     SAM2(const SAM2&) = delete;// 删除拷贝构造函数

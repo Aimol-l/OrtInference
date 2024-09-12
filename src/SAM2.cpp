@@ -187,6 +187,7 @@ std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_p
     }
     std::println("----------------------------------");
     this->is_inited = true;
+    // this->input_images.resize(3*1024*1024);
     std::println("initialize ok!!");
     return true;
 }
@@ -196,34 +197,62 @@ std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
     this->ori_img = &image;
     // 图片预处理
     try {
-        this->preprocess(image); 
+        this->preprocess(image); // 
      }catch (const std::exception& e) {
         return "Image preprocess failed!";
     }
+
     // 图片编码器，输入图片
     std::vector<Ort::Value> img_encoder_tensor;
-    img_encoder_tensor.push_back(Ort::Value::CreateTensor<float>(
+    img_encoder_tensor.push_back(std::move(Ort::Value::CreateTensor<float>(
                         memory_info,
                         this->input_images[0].ptr<float>(),
                         this->input_images[0].total(),
                         this->img_encoder_input_nodes[0].dim.data(),
-                        this->img_encoder_input_nodes[0].dim.size())
+                        this->img_encoder_input_nodes[0].dim.size()))
     );
+    //*****************************img_encoder**********************************
     auto result_0 = this->img_encoder_infer(img_encoder_tensor);
     if(result_0.index() != 0) return std::get<std::string>(result_0);
-
-    auto result_1 =this->mem_attention_infer(); // 第0帧的时候没有进行推理
+    auto& img_encoder_out =  std::get<0>(result_0); // pix_feat,high_res_feat0,high_res_feat1,vision_feats,vision_pos_embed
+    
+    //******************************mem_attention*********************************
+    auto result_1 =this->mem_attention_infer(img_encoder_out); 
     if(result_1.index() != 0) return std::get<std::string>(result_1);
-
-    auto result_2 =this->img_decoder_infer();
+    auto& mem_attention_out = std::get<0>(result_1); // image_embed
+    
+    //*****************************img_decoder**********************************
+    mem_attention_out.push_back(std::move(img_encoder_out[1])); // high_res_feat0
+    mem_attention_out.push_back(std::move(img_encoder_out[2])); // high_res_feat1
+    auto result_2 =this->img_decoder_infer(mem_attention_out);
     if(result_2.index() != 0) return std::get<std::string>(result_2);
-
-    auto result_3 =this->mem_encoder_infer();
+    auto& img_decoder_out = std::get<0>(result_2); // obj_ptr,mask_for_mem,pred_mask
+    
+    //***************************************************************
+    if(infer_status.current_frame == 0){
+        infer_status.obj_ptr_first.push_back(std::move(img_decoder_out[0]));
+    }else{
+        infer_status.obj_ptr_recent.push(std::move(img_decoder_out[0]));
+    }
+    //*******************************mem_encoder********************************
+    std::vector<Ort::Value> mem_encoder_in;
+    mem_encoder_in.push_back(std::move(img_decoder_out[1])); //mask_for_mem
+    mem_encoder_in.push_back(std::move(img_encoder_out[0])); //pix_feat
+    auto result_3 =this->mem_encoder_infer(mem_encoder_in);
     if(result_3.index() != 0) return std::get<std::string>(result_3);
-
+    auto& mem_encoder_out = std::get<0>(result_3); // maskmem_features,maskmem_pos_enc,temporal_code
+    
+    //***************************************************************
+    // 存储推理状态
+    SubStatus temp;
+    temp.maskmem_features.push_back(std::move(mem_encoder_out[0]));
+    temp.maskmem_pos_enc.push_back(std::move(mem_encoder_out[1]));
+    temp.temporal_code.push_back(std::move(mem_encoder_out[2]));
+    infer_status.status_recent.push(std::move(temp));
+    //***************************************************************
     // 后处理
     std::vector<Ort::Value> output_tensors;
-    output_tensors.push_back(std::move(this->img_decoder_out[2]));
+    output_tensors.push_back(std::move(img_decoder_out[2])); //pred_mask
     try {
         this->postprocess(output_tensors);
     }catch (const std::exception& e) {
@@ -232,54 +261,97 @@ std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
     this->infer_status.current_frame++;
     return true;
 }
-// [num_obj_ptr, current_vision_feat, current_vision_pos_embed, memory_0,memory_1, memory_pos_embed]->[image_embed]
-std::vector<Ort::Value> SAM2::build_mem_attention_input(){
+// input [1,3,1024,1024]
+// output: 
+//      pix_feat        [1,256,64,64]
+//      high_res_feat0  [1,32,256,256]
+//      high_res_feat1  [1,64,128,128]
+//      vision_feats    [1,256,64,64]
+//      vision_pos_embed [4096,1,256]
+std::variant<std::vector<Ort::Value>,std::string> SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
+    std::vector<const char*> input_names,output_names;
+    for(auto &node:this->img_encoder_input_nodes)  input_names.push_back(node.name);
+    for(auto &node:this->img_encoder_output_nodes) output_names.push_back(node.name);
+
+    std::vector<Ort::Value> img_encoder_out;
+    try {
+        img_encoder_out = std::move(this->img_encoder_session->Run(
+            Ort::RunOptions{ nullptr },
+            input_names.data(),
+            input_tensor.data(),
+            input_tensor.size(), 
+            output_names.data(), 
+            output_names.size())); 
+    }catch (const std::exception& e) {
+        std::string error(e.what());
+        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
+    }
+    return img_encoder_out;
+}
+
+// input: 
+//    pix_feat          [1,256,64,64]
+//    high_res_feat0    [1,32,256,256]
+//    high_res_feat1    [1,64,128,128]
+//    vision_feats      [1,256,64,64]
+//    vision_pos_embed  [4096, 1, 256]
+// out:
+//    image_embed   [1,256,64,64]
+std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_attention_infer(std::vector<Ort::Value>&img_encoder_out){
+    std::vector<const char*> input_names,output_names;
+    for(auto &node:this->mem_attention_input_nodes)  input_names.push_back(node.name);
+    for(auto &node:this->mem_attention_output_nodes) output_names.push_back(node.name);
+    std::vector<Ort::Value> mem_attention_out;
+    if(infer_status.current_frame == 0) [[unlikely]]{
+        mem_attention_out.push_back(std::move(img_encoder_out[3]));
+        return mem_attention_out;
+    }
+    //*******************************************************************************
+    //创建输入数据 current_vision_feat，current_vision_pos_embed，memory_0，memory_1，memory_pos_embed
     std::vector<Ort::Value> input_tensor; // 5
-    input_tensor.push_back(std::move(this->img_encoder_out[3])); //current_vision_feat
-    input_tensor.push_back(std::move(this->img_encoder_out[4])); //current_vision_pos_embed
+    input_tensor.push_back(std::move(img_encoder_out[3])); //current_vision_feat
+    input_tensor.push_back(std::move(img_encoder_out[4])); //current_vision_pos_embed
     // 需要构造出 memory 和 memory_pos_embed
     // memory是由obj_ptr_first，obj_ptr_recent和status_recent.maskmem_features 构造出的
     size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...
     std::vector<int64_t> dimensions_0{(int64_t)obj_buffer_size,256}; // [y,256]
-    float* obj_ptrs = new float[obj_buffer_size*256]; // first+recent
+    std::vector<float> obj_ptrs(obj_buffer_size*256); // first+recent
     const float* tensor_data = infer_status.obj_ptr_first[0].GetTensorData<float>();
-    memcpy(obj_ptrs, tensor_data, 256 * sizeof(float)); // 只复制了一部分
-
+    std::copy_n(tensor_data, 256, std::begin(obj_ptrs));
     for(size_t i = 0;i<infer_status.obj_ptr_recent.size();i++){
         auto& temp_tensor = infer_status.obj_ptr_recent.at(i);
         tensor_data = temp_tensor.GetTensorData<float>();
-        memcpy(obj_ptrs+256*(i+1), tensor_data, 256 * sizeof(float));
+        std::copy_n(tensor_data, 256, std::begin(obj_ptrs)+256*(i+1));
     }
     auto memory_0 = Ort::Value::CreateTensor<float>(
                     memory_info,
-                    obj_ptrs,
-                    obj_buffer_size*256,
+                    obj_ptrs.data(),
+                    obj_ptrs.size(),
                     dimensions_0.data(),
                     dimensions_0.size()
                     );
     size_t features_size = infer_status.status_recent.size(); // 1,2,3,...,7
-    float* maskmem_features_ = new float[features_size*64*64*64]; // 申请内存
+    std::vector<float> maskmem_features_(features_size*64*64*64);
     for(size_t i = 0;i<features_size;i++){
-        auto& aaa = this->infer_status.status_recent.at(i);
-        auto& temp_tensor = aaa.maskmem_features;
+        auto& temp_tensor = this->infer_status.status_recent.at(i).maskmem_features;
         tensor_data = temp_tensor[0].GetTensorData<float>();
-        memcpy(maskmem_features_+64*64*64*i, tensor_data, 64*64*64*sizeof(float));
+        std::copy_n(tensor_data, 64*64*64, std::begin(maskmem_features_)+64*64*64*i);
     }
     std::vector<int64_t> dimensions_1{(int64_t)features_size,64,64,64}; // [x,64,64,64]
     auto memory_1 = Ort::Value::CreateTensor<float>(
                     memory_info,
-                    maskmem_features_,
-                    features_size*64*64*64,
+                    maskmem_features_.data(),
+                    maskmem_features_.size(),
                     dimensions_1.data(),
                     dimensions_1.size()
                     );
     input_tensor.push_back(std::move(memory_0));
     input_tensor.push_back(std::move(memory_1));
 
-
     //***********************************************************************
     // memory_pos_embed是由两部分组成的。
-    const float* temporal_code_ = this->mem_encoder_out[2].GetTensorData<float>();// [7,1,1,64]
+    auto& temp_time = infer_status.status_recent.at(features_size-1).temporal_code;
+    const float* temporal_code_ = temp_time[0].GetTensorData<float>();
     std::vector<const float*> temporal_code;
     for(int i = 6;i>=0;i--){
         auto temp = temporal_code_+i*64;
@@ -288,7 +360,7 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
     size_t maskmem_buffer_size = infer_status.status_recent.size();
     size_t maskmem_pos_enc_size = (maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16))*64;
     
-    float* maskmem_pos_enc_ = new float[maskmem_pos_enc_size];// 1049600
+    std::vector<float> maskmem_pos_enc_(maskmem_pos_enc_size);
     
     // a[] , b[4096,1,64], c[1,1,64]
     auto tensor_add = [&](float* a,const float* b,const float* c){
@@ -303,99 +375,54 @@ std::vector<Ort::Value> SAM2::build_mem_attention_input(){
     for(size_t j = 0;j<maskmem_buffer_size;j++){
         auto& temp_tensor = this->infer_status.status_recent.at(j).maskmem_pos_enc;
         auto sub = temp_tensor[0].GetTensorData<float>();//[4096,1,64]
-        tensor_add(maskmem_pos_enc_+j*4096*64,sub,temporal_code.at(j));
+        float* p = maskmem_pos_enc_.data() + j*4096*64;
+        tensor_add(p,sub,temporal_code.at(j));
     }
     // 第二部分：
-    for(size_t i = maskmem_buffer_size*4096*64;i<maskmem_pos_enc_size;i++){
-        maskmem_pos_enc_[i] = 0.0f;
-    }
+   std::fill_n(maskmem_pos_enc_.begin()+maskmem_buffer_size*4096*64,maskmem_pos_enc_size - (maskmem_buffer_size*4096*64), 0.0f);
+    
     // [z,1,64]
     std::vector<int64_t> dimensions_3{int64_t(maskmem_buffer_size*4096+4*std::min(infer_status.current_frame,16)),1,64};
     auto memory_pos_embed = Ort::Value::CreateTensor<float>(
                         memory_info,
-                        maskmem_pos_enc_,
-                        maskmem_pos_enc_size,
+                        maskmem_pos_enc_.data(),
+                        maskmem_pos_enc_.size(),
                         dimensions_3.data(),
                         dimensions_3.size()
                         );
     input_tensor.push_back(std::move(memory_pos_embed));
-    return input_tensor;
-}
-// input [1,3,1024,1024]
-// output: 
-//      pix_feat        [1,256,64,64]
-//      high_res_feat0  [1,32,256,256]
-//      high_res_feat1  [1,64,128,128]
-//      vision_feats    [1,256,64,64]
-//      vision_pos_embed [4096,1,256]
-std::variant<bool,std::string> SAM2::img_encoder_infer(std::vector<Ort::Value> &input_tensor){
-    std::vector<const char*> input_names,output_names;
-    for(auto &node:this->img_encoder_input_nodes)  input_names.push_back(node.name);
-    for(auto &node:this->img_encoder_output_nodes) output_names.push_back(node.name);
+    //*******************************************************************************
     try {
-        this->img_encoder_out = this->img_encoder_session->Run(
-            Ort::RunOptions{ nullptr },
-            input_names.data(),
-            input_tensor.data(),
-            input_tensor.size(), 
-            output_names.data(), 
-            output_names.size()); 
-    }catch (const std::exception& e) {
-        std::string error(e.what());
-        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
-    }
-    return true;
-}
-
-// input:
-//      num_obj_ptr             [num]
-//      current_vision_feat     [4096,1,256]
-//      current_vision_pos_embed [4096,1,256]
-//      memory                  [buff,1,64]
-//      memory_pos_embed        [buff,1,64]
-// output:
-//      image_embed     [1,256,64,64]
-std::variant<bool,std::string> SAM2::mem_attention_infer(){
-    if(infer_status.current_frame == 0) [[unlikely]]{
-        this->mem_attention_out.push_back(std::move(this->img_encoder_out[3]));
-        return true;
-    }
-    //创建输入数据
-    auto input_tensor = this->build_mem_attention_input();
-    std::vector<const char*> input_names,output_names;
-    for(auto &node:this->mem_attention_input_nodes)  input_names.push_back(node.name);
-    for(auto &node:this->mem_attention_output_nodes) output_names.push_back(node.name);
-    try {
-        this->mem_attention_out = this->mem_attention_session->Run(
+        mem_attention_out = std::move(this->mem_attention_session->Run(
             Ort::RunOptions{ nullptr },
             input_names.data(),
             input_tensor.data(),
             input_tensor.size(),
             output_names.data(),
-            output_names.size());
+            output_names.size()));
     }catch (const std::exception& e) {
         std::string error(e.what());
-        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
+        return std::format("ERROR: mem_attention_infer failed!!\n {}",error);
     }
-    return true;
+    return mem_attention_out;
 }
 
 // input:
-//      point_coords    [num_labels,num_points,2]
-//      point_labels    [num_labels,num_points]
-//      frame_size      [2]
-//      image_embed     [1,256,64,64]
-//      high_res_feats_0[1,32,256,256]
-//      high_res_feats_1[1,64,128,128]
+//      image_embed         [1,256,64,64]
+//      high_res_feats_0    [1,32,256,256]
+//      high_res_feats_1    [1,64,128,128]
 // output:
 //      obj_ptr       [1,256]
 //      mask_for_mem  [1,1,1024,1024]
 //      pred_mask     [1,H,W]
-std::variant<bool,std::string> SAM2::img_decoder_infer(){
+std::variant<std::vector<Ort::Value>,std::string> SAM2::img_decoder_infer(std::vector<Ort::Value>&mem_attention_out){
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->img_decoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->img_decoder_output_nodes) output_names.push_back(node.name);
+
+    // point_coords,point_labels,frame_size,image_embed,high_res_feats_0,high_res_feats_1
     std::vector<Ort::Value> input_tensor; // 6
+    
     auto box = parms.prompt_box;
     // 变化bbox比例
     box.x = 1024*((float)box.x / ori_img->cols);
@@ -405,9 +432,9 @@ std::variant<bool,std::string> SAM2::img_decoder_infer(){
     std::vector<float>point_val{(float)box.x,(float)box.y,(float)box.x+box.width,(float)box.y+box.height};//xyxy
     std::vector<float> point_labels = {2,3};
     std::vector<int64> frame_size = {ori_img->rows,ori_img->cols};
-    //***************************************************************
     this->img_decoder_input_nodes[0].dim = {1,2,2};
     this->img_decoder_input_nodes[1].dim = {1,2};
+    //***************************************************************
     input_tensor.push_back(Ort::Value::CreateTensor<float>(memory_info,point_val.data(),point_val.size(),
                         this->img_decoder_input_nodes[0].dim.data(),
                         this->img_decoder_input_nodes[0].dim.size()));
@@ -418,12 +445,13 @@ std::variant<bool,std::string> SAM2::img_decoder_infer(){
                         this->img_decoder_input_nodes[2].dim.data(),
                         this->img_decoder_input_nodes[2].dim.size()));
     
-    input_tensor.push_back(std::move(this->mem_attention_out[0]));
-    input_tensor.push_back(std::move(this->img_encoder_out[1]));
-    input_tensor.push_back(std::move(this->img_encoder_out[2]));
+    input_tensor.push_back(std::move(mem_attention_out[0]));    // image_embed
+    input_tensor.push_back(std::move(mem_attention_out[1]));    // high_res_feats_0
+    input_tensor.push_back(std::move(mem_attention_out[2]));    // high_res_feats_1
     //***************************************************
+    std::vector<Ort::Value> img_decoder_out;
     try {
-        this->img_decoder_out = std::move(this->img_decoder_session->Run(
+        img_decoder_out = std::move(this->img_decoder_session->Run(
             Ort::RunOptions{ nullptr },
             input_names.data(),
             input_tensor.data(),
@@ -432,14 +460,9 @@ std::variant<bool,std::string> SAM2::img_decoder_infer(){
             output_names.size()));
     }catch (const std::exception& e) {
         std::string error(e.what());
-        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
+        return std::format("ERROR: img_decoder_infer failed!!\n {}",error);
     }
-    if(infer_status.current_frame == 0){
-        infer_status.obj_ptr_first.push_back(std::move(this->img_decoder_out[0]));
-    }else{
-        infer_status.obj_ptr_recent.push(std::move(this->img_decoder_out[0]));
-    }
-    return true;
+    return img_decoder_out;
 }
 
 // input:
@@ -449,39 +472,32 @@ std::variant<bool,std::string> SAM2::img_decoder_infer(){
 //      maskmem_features  [1,64,64,64]
 //      maskmem_pos_enc   [4096,1,64]
 //      temporal_code     [7,1,1,64]
-std::variant<bool,std::string> SAM2::mem_encoder_infer(){
-    std::vector<Ort::Value> input_tensor; // 2
+std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_encoder_infer(std::vector<Ort::Value>&img_decoder_out){
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->mem_encoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->mem_encoder_output_nodes) output_names.push_back(node.name);
-    input_tensor.push_back(std::move(this->img_decoder_out[1]));
-    input_tensor.push_back(std::move(this->img_encoder_out[0]));
     //***************************************************
+    std::vector<Ort::Value> mem_encoder_out;
     try {
-        this->mem_encoder_out = this->mem_encoder_session->Run(
+        mem_encoder_out = std::move(this->mem_encoder_session->Run(
             Ort::RunOptions{ nullptr },
             input_names.data(),
-            input_tensor.data(),
-            input_tensor.size(),
+            img_decoder_out.data(),
+            img_decoder_out.size(),
             output_names.data(),
-            output_names.size());
+            output_names.size()));
     }catch (const std::exception& e) {
         std::string error(e.what());
-        return std::format("ERROR: img_encoder_infer failed!!\n {}",error);
+        return std::format("ERROR: mem_encoder_infer failed!!\n {}",error);
     }
-    // 存储推理状态
-    SubStatus temp;
-    temp.maskmem_features.push_back(std::move(this->mem_encoder_out[0]));
-    temp.maskmem_pos_enc.push_back(std::move(this->mem_encoder_out[1]));
-    infer_status.status_recent.push(std::move(temp));
-    return true;
+    return mem_encoder_out;
 }
 
 void SAM2::preprocess(cv::Mat &image){
-    input_images.clear();
     std::vector<cv::Mat> mats{image};
-    cv::Mat img = cv::dnn::blobFromImages(mats, 1/255.0,cv::Size(1024,1024), cv::Scalar(0, 0, 0), true, false);
-    input_images.push_back(std::move(img));
+    cv::Mat blob = cv::dnn::blobFromImages(mats, 1/255.0,cv::Size(1024,1024), cv::Scalar(0, 0, 0), true, false);
+    input_images.clear();
+    this->input_images.emplace_back(blob);
 }
 
 void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
@@ -514,8 +530,6 @@ void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
         parms.prompt_box = min_dis_rect;
         cv::drawContours(*ori_img, contours, idx, cv::Scalar(50,250,20),2,cv::LINE_AA);
         cv::rectangle(*ori_img, parms.prompt_box,cv::Scalar(0,0,255),2);
-        // std::string text = std::format("frame= {}",this->infer_status.current_frame);
-        // cv::putText(*ori_img,text,cv::Point{20,40},1,2,cv::Scalar(0,0,255),2);
     }
 }
 int SAM2::setparms(ParamsSam2 parms){

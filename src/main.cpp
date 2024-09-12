@@ -72,10 +72,10 @@ void yolosam(){
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("duration = {}ms",duration);
         if(result.index() == 0){
-            auto filename = std::filesystem::path(path).filename().string();
-            cv::imwrite(output_path+filename,image);
-            cv::imshow("Image", image);
-            cv::waitKey(0);
+            // auto filename = std::filesystem::path(path).filename().string();
+            // cv::imwrite(output_path+filename,image);
+            // cv::imshow("Image", image);
+            // cv::waitKey(0);
         }else{
             std::string error = std::get<std::string>(result);
             std::println("错误：{}",error);
@@ -159,7 +159,7 @@ void sam2(){
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         std::println("frame = {},duration = {}ms",idx++,duration);
         if(result.index() == 0){
-            std::string text = std::format("frame = {},fps={:.1f}",idx++,1000.0f/duration);
+            std::string text = std::format("frame = {},fps={:.1f}",idx,1000.0f/duration);
             cv::putText(frame,text,cv::Point{30,40},1,2,cv::Scalar(0,0,255),2);
             cv::imshow("frame", frame);
             int key = cv::waitKey(5);
@@ -169,6 +169,7 @@ void sam2(){
             std::println("错误：{}",error);
             break;
         }
+        // if(idx == 100) break;
     }
     capture.release();
 }
