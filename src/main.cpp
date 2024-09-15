@@ -137,8 +137,9 @@ void sam2(){
         std::println("错误：{}",error);
         return;
     }
-    sam2->setparms({.prompt_box = {745,695,145,230}}); // 在原始图像上的box
-    // sam2->setparms({.prompt_box = {590,490,138,250}}); // 在原始图像上的box
+    sam2->setparms({.type=1,
+                    .prompt_box = {745,695,145,230},
+                    .prompt_point = {846,794}}); // 在原始图像上的box,point
 
     std::string video_path = "../assets/video/test.mkv";
     cv::VideoCapture capture(video_path);
@@ -169,7 +170,6 @@ void sam2(){
             std::println("错误：{}",error);
             break;
         }
-        // if(idx == 100) break;
     }
     capture.release();
 }

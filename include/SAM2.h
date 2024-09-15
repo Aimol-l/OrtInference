@@ -18,7 +18,9 @@ struct InferenceStatus{
     yo::FixedSizeQueue<Ort::Value,BUFFER_SIZE> obj_ptr_recent;
 };
 struct ParamsSam2{
+    uint type = 0; // 0使用box，1使用point
     cv::Rect prompt_box;
+    cv::Point prompt_point;
 };
 private:
     bool is_inited = false;

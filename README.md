@@ -41,7 +41,7 @@ cmake .. && make && ../bin/./main
 
 [Yolov10+ByteTrack C++ Opencv OnnxRuntime推理部署](https://www.acfun.cn/v/ac45658815)
 
-[SAM2 C++ Opencv OnnxRuntime推理部署] todo...
+[SAM2 C++ Opencv OnnxRuntime推理部署](https://www.acfun.cn/v/ac46243626)
 ## 参考
 
 SAM：https://github.com/facebookresearch/segment-anything

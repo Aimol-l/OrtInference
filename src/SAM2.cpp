@@ -1,7 +1,7 @@
 #include "SAM2.h"
 
 std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_paths, bool is_cuda){
-    // image_encoder,memory_attention,image_encoder,memory_encoder
+    // image_encoder,memory_attention,image_decoder,memory_encoder
     assert(onnx_paths.size() == 4);
     auto is_file = [](const std::string& filename) {
         std::ifstream file(filename.c_str());
@@ -29,6 +29,16 @@ std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_p
             this->mem_attention_options.AppendExecutionProvider_CUDA(options);
             this->mem_encoder_options.AppendExecutionProvider_CUDA(options);
             std::println("Using CUDA...");
+
+            // const auto& api = Ort::GetApi();
+            // OrtTensorRTProviderOptionsV2* tensorrt_options;
+            // Ort::ThrowOnError(api.CreateTensorRTProviderOptions(&tensorrt_options));
+            // std::unique_ptr<OrtTensorRTProviderOptionsV2, decltype(api.ReleaseTensorRTProviderOptions)> rel_trt_options(tensorrt_options, api.ReleaseTensorRTProviderOptions);
+            // Ort::ThrowOnError(api.SessionOptionsAppendExecutionProvider_TensorRT_V2(static_cast<OrtSessionOptions*>(this->img_encoder_options),rel_trt_options.get()));
+            // Ort::ThrowOnError(api.SessionOptionsAppendExecutionProvider_TensorRT_V2(static_cast<OrtSessionOptions*>(this->img_decoder_options),rel_trt_options.get()));
+            // Ort::ThrowOnError(api.SessionOptionsAppendExecutionProvider_TensorRT_V2(static_cast<OrtSessionOptions*>(this->mem_attention_options),rel_trt_options.get()));
+            // Ort::ThrowOnError(api.SessionOptionsAppendExecutionProvider_TensorRT_V2(static_cast<OrtSessionOptions*>(this->mem_encoder_options),rel_trt_options.get()));
+            // std::println("Using TensorRT...");
         }catch (const std::exception& e) {
             std::string error(e.what());
             return error;
@@ -38,8 +48,32 @@ std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_p
     }
  try {
 #ifdef _WIN32
-    // todo
-    return -4;
+        unsigned len_img_encoder = onnx_paths[0].size() * 2; // 预留字节数
+        unsigned len_mem_attention = onnx_paths[1].size() * 2; // 预留字节数
+        unsigned len_img_decoder = onnx_paths[2].size() * 2; // 预留字节数
+        unsigned len_mem_encoder = onnx_paths[3].size() * 2; // 预留字节数
+        setlocale(LC_CTYPE, ""); //必须调用此函数,本地化
+        wchar_t* p_img_encoder = new wchar_t[len_yolo]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_mem_attention = new wchar_t[len_encoder]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_img_decoder = new wchar_t[len_decoder]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_mem_encoder = new wchar_t[len_decoder]; // 申请一段内存存放转换后的字符串
+
+        mbstowcs(p_img_encoder, onnx_paths[0].c_str(), len_img_encoder); // 转换
+        mbstowcs(p_mem_attention,onnx_paths[1].c_str(), len_mem_attention); // 转换
+        mbstowcs(p_img_decoder, onnx_paths[2].c_str(), len_img_decoder); // 转换
+        mbstowcs(p_mem_encoder, onnx_paths[3].c_str(), len_mem_encoder); // 转换
+
+        std::wstring wstr_img_encoder(p_img_encoder);
+        std::wstring wstr_mem_attention(p_mem_attention);
+        std::wstring wstr_img_decoder(p_img_decoder);
+        std::wstring wstr_mem_encoder(p_mem_encoder);
+
+        delete[] p_img_encoder,p_mem_attention,p_img_decoder,p_mem_encoder; // 释放申请的内存
+
+        img_encoder_session = new Ort::Session(img_encoder_env, wstr_img_encoder.c_str(), this->img_encoder_options);
+        mem_attention_session = new Ort::Session(mem_attention_env, wstr_mem_attention.c_str(), this->mem_attention_options);
+        img_decoder_session = new Ort::Session(img_decoder_env, wstr_img_decoder.c_str(), this->img_decoder_options);
+        mem_encoder_session = new Ort::Session(mem_encoder_env, wstr_mem_encoder.c_str(), this->mem_encoder_options);
 #else
         img_encoder_session = new Ort::Session(img_encoder_env, (const char*)onnx_paths[0].c_str(), this->img_encoder_options);
         mem_attention_session = new Ort::Session(mem_attention_env, (const char*)onnx_paths[1].c_str(), this->mem_attention_options);
@@ -201,7 +235,6 @@ std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
      }catch (const std::exception& e) {
         return "Image preprocess failed!";
     }
-
     // 图片编码器，输入图片
     std::vector<Ort::Value> img_encoder_tensor;
     img_encoder_tensor.push_back(std::move(Ort::Value::CreateTensor<float>(
@@ -217,7 +250,7 @@ std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
     auto& img_encoder_out =  std::get<0>(result_0); // pix_feat,high_res_feat0,high_res_feat1,vision_feats,vision_pos_embed
     
     //******************************mem_attention*********************************
-    auto result_1 =this->mem_attention_infer(img_encoder_out); 
+    auto result_1 = this->mem_attention_infer(img_encoder_out); 
     if(result_1.index() != 0) return std::get<std::string>(result_1);
     auto& mem_attention_out = std::get<0>(result_1); // image_embed
     
@@ -228,20 +261,19 @@ std::variant<bool,std::string> SAM2::inference(cv::Mat &image){
     if(result_2.index() != 0) return std::get<std::string>(result_2);
     auto& img_decoder_out = std::get<0>(result_2); // obj_ptr,mask_for_mem,pred_mask
     
-    //***************************************************************
-    if(infer_status.current_frame == 0){
+    //***********************************************************************
+    if(infer_status.current_frame == 0)[[unlikely]]{
         infer_status.obj_ptr_first.push_back(std::move(img_decoder_out[0]));
     }else{
         infer_status.obj_ptr_recent.push(std::move(img_decoder_out[0]));
     }
-    //*******************************mem_encoder********************************
+    //*******************************mem_encoder******************************
     std::vector<Ort::Value> mem_encoder_in;
     mem_encoder_in.push_back(std::move(img_decoder_out[1])); //mask_for_mem
     mem_encoder_in.push_back(std::move(img_encoder_out[0])); //pix_feat
     auto result_3 =this->mem_encoder_infer(mem_encoder_in);
     if(result_3.index() != 0) return std::get<std::string>(result_3);
     auto& mem_encoder_out = std::get<0>(result_3); // maskmem_features,maskmem_pos_enc,temporal_code
-    
     //***************************************************************
     // 存储推理状态
     SubStatus temp;
@@ -313,16 +345,20 @@ std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_attention_infer(std:
     input_tensor.push_back(std::move(img_encoder_out[4])); //current_vision_pos_embed
     // 需要构造出 memory 和 memory_pos_embed
     // memory是由obj_ptr_first，obj_ptr_recent和status_recent.maskmem_features 构造出的
-    size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...
+    size_t obj_buffer_size = 1 + infer_status.obj_ptr_recent.size();//1+0,1+1,1+2,...,1+15
+
     std::vector<int64_t> dimensions_0{(int64_t)obj_buffer_size,256}; // [y,256]
-    std::vector<float> obj_ptrs(obj_buffer_size*256); // first+recent
+    std::vector<float> obj_ptrs(obj_buffer_size*256); // first+recent // 16*256
+
     const float* tensor_data = infer_status.obj_ptr_first[0].GetTensorData<float>();
     std::copy_n(tensor_data, 256, std::begin(obj_ptrs));
+
     for(size_t i = 0;i<infer_status.obj_ptr_recent.size();i++){
         auto& temp_tensor = infer_status.obj_ptr_recent.at(i);
         tensor_data = temp_tensor.GetTensorData<float>();
         std::copy_n(tensor_data, 256, std::begin(obj_ptrs)+256*(i+1));
     }
+
     auto memory_0 = Ort::Value::CreateTensor<float>(
                     memory_info,
                     obj_ptrs.data(),
@@ -330,6 +366,7 @@ std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_attention_infer(std:
                     dimensions_0.data(),
                     dimensions_0.size()
                     );
+    
     size_t features_size = infer_status.status_recent.size(); // 1,2,3,...,7
     std::vector<float> maskmem_features_(features_size*64*64*64);
     for(size_t i = 0;i<features_size;i++){
@@ -351,7 +388,7 @@ std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_attention_infer(std:
     //***********************************************************************
     // memory_pos_embed是由两部分组成的。
     auto& temp_time = infer_status.status_recent.at(features_size-1).temporal_code;
-    const float* temporal_code_ = temp_time[0].GetTensorData<float>();
+    const float* temporal_code_ = temp_time[0].GetTensorData<float>(); // [7,64]
     std::vector<const float*> temporal_code;
     for(int i = 6;i>=0;i--){
         auto temp = temporal_code_+i*64;
@@ -376,7 +413,7 @@ std::variant<std::vector<Ort::Value>,std::string> SAM2::mem_attention_infer(std:
         auto& temp_tensor = this->infer_status.status_recent.at(j).maskmem_pos_enc;
         auto sub = temp_tensor[0].GetTensorData<float>();//[4096,1,64]
         float* p = maskmem_pos_enc_.data() + j*4096*64;
-        tensor_add(p,sub,temporal_code.at(j));
+        tensor_add(p,sub,temporal_code.at(j)); // [4096,1,64] + [1,1,64] ->[4096,1,64] + [4096,1,64] ->[4096,1,64]
     }
     // 第二部分：
    std::fill_n(maskmem_pos_enc_.begin()+maskmem_buffer_size*4096*64,maskmem_pos_enc_size - (maskmem_buffer_size*4096*64), 0.0f);
@@ -419,21 +456,30 @@ std::variant<std::vector<Ort::Value>,std::string> SAM2::img_decoder_infer(std::v
     std::vector<const char*> input_names,output_names;
     for(auto &node:this->img_decoder_input_nodes)  input_names.push_back(node.name);
     for(auto &node:this->img_decoder_output_nodes) output_names.push_back(node.name);
-
     // point_coords,point_labels,frame_size,image_embed,high_res_feats_0,high_res_feats_1
     std::vector<Ort::Value> input_tensor; // 6
-    
     auto box = parms.prompt_box;
+    auto point = parms.prompt_point;
     // 变化bbox比例
     box.x = 1024*((float)box.x / ori_img->cols);
     box.y = 1024*((float)box.y / ori_img->rows);
     box.width = 1024*((float)box.width / ori_img->cols);
     box.height = 1024*((float)box.height / ori_img->rows);
-    std::vector<float>point_val{(float)box.x,(float)box.y,(float)box.x+box.width,(float)box.y+box.height};//xyxy
-    std::vector<float> point_labels = {2,3};
+    point.x = 1024*((float)point.x / ori_img->cols);
+    point.y = 1024*((float)point.y / ori_img->rows);
+    std::vector<float>point_val,point_labels;
+    if(parms.type == 0){
+        point_val = {(float)box.x,(float)box.y,(float)box.x+box.width,(float)box.y+box.height};//xyxy
+        point_labels = {2,3};
+        this->img_decoder_input_nodes[0].dim = {1,2,2};
+        this->img_decoder_input_nodes[1].dim = {1,2};
+    }else if(parms.type == 1){
+        point_val = {(float)point.x,(float)point.y};//xy
+        point_labels = {1};
+        this->img_decoder_input_nodes[0].dim = {1,1,2};
+        this->img_decoder_input_nodes[1].dim = {1,1};
+    }
     std::vector<int64> frame_size = {ori_img->rows,ori_img->cols};
-    this->img_decoder_input_nodes[0].dim = {1,2,2};
-    this->img_decoder_input_nodes[1].dim = {1,2};
     //***************************************************************
     input_tensor.push_back(Ort::Value::CreateTensor<float>(memory_info,point_val.data(),point_val.size(),
                         this->img_decoder_input_nodes[0].dim.data(),
@@ -508,7 +554,7 @@ void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
     cv::threshold(dst,dst,0,255,cv::THRESH_BINARY);
     cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
     cv::morphologyEx(dst, dst, cv::MORPH_OPEN, element);
-    std::vector<std::vector<cv::Point>> contours;
+    std::vector<std::vector<cv::Point>> contours; // 不一定是1
     cv::findContours(dst, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
     int idx = -1;
@@ -528,6 +574,8 @@ void SAM2::postprocess(std::vector<Ort::Value> &output_tensors){
     }
     if (!min_dis_rect.empty()) {
         parms.prompt_box = min_dis_rect;
+        parms.prompt_point.x = min_dis_rect.x + min_dis_rect.width/2;
+        parms.prompt_point.y = min_dis_rect.y + min_dis_rect.height/2;
         cv::drawContours(*ori_img, contours, idx, cv::Scalar(50,250,20),2,cv::LINE_AA);
         cv::rectangle(*ori_img, parms.prompt_box,cv::Scalar(0,0,255),2);
     }
