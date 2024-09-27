@@ -53,10 +53,10 @@ std::variant<bool,std::string> SAM2::initialize(std::vector<std::string>& onnx_p
         unsigned len_img_decoder = onnx_paths[2].size() * 2; // 预留字节数
         unsigned len_mem_encoder = onnx_paths[3].size() * 2; // 预留字节数
         setlocale(LC_CTYPE, ""); //必须调用此函数,本地化
-        wchar_t* p_img_encoder = new wchar_t[len_yolo]; // 申请一段内存存放转换后的字符串
-        wchar_t* p_mem_attention = new wchar_t[len_encoder]; // 申请一段内存存放转换后的字符串
-        wchar_t* p_img_decoder = new wchar_t[len_decoder]; // 申请一段内存存放转换后的字符串
-        wchar_t* p_mem_encoder = new wchar_t[len_decoder]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_img_encoder = new wchar_t[len_img_encoder]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_mem_attention = new wchar_t[len_mem_attention]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_img_decoder = new wchar_t[len_img_decoder]; // 申请一段内存存放转换后的字符串
+        wchar_t* p_mem_encoder = new wchar_t[len_mem_encoder]; // 申请一段内存存放转换后的字符串
 
         mbstowcs(p_img_encoder, onnx_paths[0].c_str(), len_img_encoder); // 转换
         mbstowcs(p_mem_attention,onnx_paths[1].c_str(), len_mem_attention); // 转换
