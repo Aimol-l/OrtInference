@@ -98,6 +98,12 @@
         "queue": "cpp",
         "stack": "cpp",
         "__hash_table": "cpp",
-        "__tree": "cpp"
+        "__tree": "cpp",
+        "__node_handle": "cpp",
+        "execution": "cpp",
+        "regex": "cpp",
+        "*.expression": "cpp",
+        "alignedvector3": "cpp",
+        "fft": "cpp"
     }
 }

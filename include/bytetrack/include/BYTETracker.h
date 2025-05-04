@@ -31,7 +31,7 @@ private:
 	vector<vector<float> > ious(vector<vector<float> > &atlbrs, vector<vector<float> > &btlbrs);
 
 	double lapjv(const vector<vector<float> > &cost, vector<int> &rowsol, vector<int> &colsol, 
-		bool extend_cost = false, float cost_limit = LONG_MAX, bool return_cost = true);
+		bool extend_cost = false, float cost_limit = 9223372036854.0f, bool return_cost = true);
 
 private:
 
