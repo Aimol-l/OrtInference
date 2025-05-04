@@ -12,8 +12,8 @@ struct ParamsOCR{
     int min_area = 64;           // 文字区域最小面积
     float text = 0.5;           // 文字检测阈值, 0<=text<=1
     float thresh = 0.5;	        // 文字区域识别阈值, 0<=thresh<=1
-    float unclip_ratio = 1.5;   // 区域扩展强度
-    const char* dictionary;  	// 字典文件路径(dictionary.txt)
+    float unclip_ratio = 2.0f;   // 区域扩展强度，1<=unclip_ratio
+    const char* dictionary=nullptr;  	// 字典文件路径(dictionary.txt)
 };
 struct Polygon{
     float score;

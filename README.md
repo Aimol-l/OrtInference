@@ -6,17 +6,18 @@
  + YoloV10 + SAM 检测出目标并进行分割出mask
  + YoloV10 + ByteTrack 视频中多目标跟踪
  + SAM2 视频的目标跟踪分割
+ + PaddleOCR  文字识别
 
 SAM2 所用的onnx文件，参考https://github.com/Aimol-l/SAM2Export
 
 ## 依赖
-+ opencv >= 4.8,tested on 4.10
-+ onnxruntime >= 1.18.0,tested on 1.18.1
-+ cuda >= 12.x,tested on 12.5
++ opencv >= 4.8,tested on 4.11
++ onnxruntime >= 1.18.0,tested on 1.20.2
++ cuda >= 12.x,tested on 12.8
 + cudnn >= 9.x,tested on 9.2
 + gcc >= 14.1.1 (required c++23)
 + cmake >= 3.25,tested on 3.30
-+ tbb, tested on 2021.13.0
++ tbb, tested on 2022.1.0
 
 ## Arch Linux
 
@@ -30,6 +31,10 @@ cmake -B build
 cd build
 cmake .. && make && ../bin/./main
 ```
+
+## PaddleOCR
+
+![alt text](assets/output/ocr.png)
 
 ## video
 
@@ -53,3 +58,7 @@ YOLOv10：https://github.com/THU-MIG/yolov10
 SAM2Export：https://github.com/Aimol-l/SAM2Export
 
 SAM2：https://github.com/facebookresearch/segment-anything-2
+
+PaddleOCR: https://github.com/PaddlePaddle/PaddleOCR
+
+Clipper2： https://github.com/AngusJohnson/Clipper2

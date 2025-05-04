@@ -94,7 +94,7 @@ std::variant<bool,std::string> PaddleOCR::initialize(std::vector<std::string>& o
     this->load_onnx_info(this->session_rec,this->input_nodes_rec,this->output_nodes_rec);
     
     this->is_inited = true;
-    std::println("initialize ok!!");
+    // std::println("initialize ok!!");
     return true;
 }
 int PaddleOCR::setparms(ParamsOCR parms){
@@ -141,15 +141,15 @@ std::variant<bool,std::string> PaddleOCR::inference(cv::Mat &image){
     }
     std::optional<std::vector<cv::Mat>> det_result = this->infer_det(); 
     if (!det_result.has_value()) return "Detection failed! can't find any text!";
-    std::println("Detection success!");
+    // std::println("Detection success!");
 
     std::optional<std::vector<cv::Mat>> cls_result = this->infer_cls(det_result.value()); // 返回的是预处理好的子图
     if(!cls_result.has_value()) return "Classification failed!";
-    std::println("Classification success!");
+    // std::println("Classification success!");
 
     std::optional<std::vector<Ort::Value>> rec_result = this->infer_rec(cls_result.value());
     if(!rec_result.has_value()) return "Recognition failed!";
-    std::println("Recognition success!");
+    // std::println("Recognition success!");
 
     this->postprocess(rec_result.value());
 
