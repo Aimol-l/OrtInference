@@ -43,7 +43,7 @@ protected:
 
     std::vector<cv::Point2f> unclip(std::vector<cv::Point>& points);
     float box_score_slow(cv::Mat&pred,std::vector<cv::Point>& approx);
-    std::vector<Polygon> postprocess_det(cv::Mat &pred,cv::Mat& bitmap);
+    std::vector<Polygon> poly_from_bitmap(cv::Mat &pred,cv::Mat& bitmap);
 
     std::optional<std::vector<cv::Mat>> infer_det();                                // 文本区域识别,返回文本区域的分割
     std::optional<std::vector<cv::Mat>> infer_cls(std::vector<cv::Mat>& images);    // 文本方向识别

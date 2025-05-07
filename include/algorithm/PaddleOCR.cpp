@@ -89,9 +89,9 @@ std::variant<bool,std::string> PaddleOCR::initialize(std::vector<std::string>& o
     }catch (const std::exception& e) {
         return std::format("Failed to load model. Please check your onnx file!");
     }
-    this->load_onnx_info(this->session_det,this->input_nodes_det,this->output_nodes_det);
-    this->load_onnx_info(this->session_cls,this->input_nodes_cls,this->output_nodes_cls);
-    this->load_onnx_info(this->session_rec,this->input_nodes_rec,this->output_nodes_rec);
+    this->load_onnx_info(this->session_det,this->input_nodes_det,this->output_nodes_det,"det.onnx");
+    this->load_onnx_info(this->session_cls,this->input_nodes_cls,this->output_nodes_cls,"cls.onnx");
+    this->load_onnx_info(this->session_rec,this->input_nodes_rec,this->output_nodes_rec,"rec.onnx");
     
     this->is_inited = true;
     // std::println("initialize ok!!");
@@ -123,8 +123,7 @@ void PaddleOCR::preprocess(cv::Mat &image){
     cv::subtract(resized_image, cv::Scalar(0.485,0.456,0.406), resized_image);
     cv::divide(resized_image, cv::Scalar(0.229,0.224,0.225), resized_image);
     // 将图像转换为模型输入格式
-    std::vector<cv::Mat> mats{resized_image};
-    cv::Mat blob = cv::dnn::blobFromImages(mats, 1,cv::Size(new_width, new_height), cv::Scalar(0, 0, 0), false, false);
+    cv::Mat blob = cv::dnn::blobFromImage(resized_image, 1,cv::Size(new_width, new_height), cv::Scalar(0, 0, 0), true, false);
     this->input_nodes_det[0].dim = {1, 3, new_height, new_width};
     // 清空并保存处理后的图像
     input_images.clear();
@@ -141,15 +140,15 @@ std::variant<bool,std::string> PaddleOCR::inference(cv::Mat &image){
     }
     std::optional<std::vector<cv::Mat>> det_result = this->infer_det(); 
     if (!det_result.has_value()) return "Detection failed! can't find any text!";
-    // std::println("Detection success!");
+    std::println("Detection success!");
 
     std::optional<std::vector<cv::Mat>> cls_result = this->infer_cls(det_result.value()); // 返回的是预处理好的子图
     if(!cls_result.has_value()) return "Classification failed!";
-    // std::println("Classification success!");
+    std::println("Classification success!");
 
     std::optional<std::vector<Ort::Value>> rec_result = this->infer_rec(cls_result.value());
     if(!rec_result.has_value()) return "Recognition failed!";
-    // std::println("Recognition success!");
+    std::println("Recognition success!");
 
     this->postprocess(rec_result.value());
 
@@ -157,8 +156,8 @@ std::variant<bool,std::string> PaddleOCR::inference(cv::Mat &image){
 }
 void PaddleOCR::postprocess(std::vector<Ort::Value> &output_tensors){
     float* output = output_tensors[0].GetTensorMutableData<float>();
-    auto output_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape(); // [batch,M,6625],M是句子最大字符数量
-    // std::println("shape=[{},{},{}]",output_shape[0],output_shape[1],output_shape[2]); // [batch,M,6625]
+    auto output_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape(); // [batch,M,15631],M是句子最大字符数量
+    std::println("output shape=[{},{},{}]",output_shape[0],output_shape[1],output_shape[2]); // [batch,92,15631]
     // [batch,M]
     std::vector<std::vector<float>> max_values(output_shape[0], std::vector<float>(output_shape[1], -std::numeric_limits<float>::infinity()));
     // [batch,M]
@@ -193,13 +192,17 @@ void PaddleOCR::postprocess(std::vector<Ort::Value> &output_tensors){
             auto text = this->dictionary.get_char(max_indices[batch][j]-1);
             results_text[batch] += text;
         }
-        if(results_text[batch].empty()) continue;
-        std::println("Text {} => {}",batch,results_text[batch]);
         // 绘制
         cv::RotatedRect rorect = cv::minAreaRect(this->polygons[batch].points);
         std::vector<cv::Point2f> ropoints;
         rorect.points(ropoints);
-        for(int i =0;i<4;i++)   cv::line(*ori_img,ropoints[i],ropoints[(i+1)%4],cv::Scalar(50,255,50),2);
+        cv::putText(*ori_img,std::to_string(batch),ropoints[0],cv::FONT_HERSHEY_SIMPLEX,0.5,cv::Scalar(50,25,255),1);
+        if(results_text[batch].empty()){
+            for(int i =0;i<4;i++)   cv::line(*ori_img,ropoints[i],ropoints[(i+1)%4],cv::Scalar(50,0,255),1);
+        }else{
+            std::println("Text {} => {}",batch,results_text[batch]);
+            for(int i =0;i<4;i++)   cv::line(*ori_img,ropoints[i],ropoints[(i+1)%4],cv::Scalar(25,250,50),1);
+        }
     }
 }
 std::vector<cv::Point2f> PaddleOCR::unclip(std::vector<cv::Point> &polygon){
@@ -255,7 +258,7 @@ float PaddleOCR::box_score_slow(cv::Mat &pred, std::vector<cv::Point> &approx){
     return static_cast<float>(cv::mean(pred, mask)[0]);
 }
 
-std::vector<PaddleOCR::Polygon> PaddleOCR::postprocess_det(cv::Mat &pred, cv::Mat &bitmap){
+std::vector<PaddleOCR::Polygon> PaddleOCR::poly_from_bitmap(cv::Mat &pred, cv::Mat &bitmap){
     std::vector<PaddleOCR::Polygon> result;
     cv::Mat binmat;
     bitmap.convertTo(binmat, CV_8UC1,255);
@@ -322,13 +325,16 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_det(){
     // 后处理mask: 
     float* output = output_tensor[0].GetTensorMutableData<float>();
     auto output_shape = output_tensor[0].GetTensorTypeAndShapeInfo().GetShape(); // [1,1,h,w]
+    std::println("det output shape=[{},{},{},{}]",output_shape[0],output_shape[1],output_shape[2],output_shape[3]); // 
     cv::Mat prob = cv::Mat((size_t)output_shape[2],(size_t)output_shape[3],CV_32FC1,output); // 概率图
+    // cv::imshow("prob",prob);
+    // cv::waitKey(0);
     // 将prob中小于thresh的置为0
     cv::Mat bitmap;
     cv::threshold(prob,bitmap,this->params.thresh,1.0,cv::THRESH_BINARY);
     cv::rectangle(bitmap,cv::Point(0,0),cv::Point(bitmap.cols-1,bitmap.rows-1),cv::Scalar(0),2);
     // 结合概率图和分割图计算文本框位置
-    this->polygons = this->postprocess_det(prob,bitmap); // 坐标是在ori_img上的
+    this->polygons = this->poly_from_bitmap(prob,bitmap); // 坐标是在ori_img上的
     if(polygons.empty()) {
         return std::nullopt;
     }
@@ -362,6 +368,7 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_det(){
         if(rect.y + rect.height > (*ori_img).rows) 
             rect.height = (*ori_img).rows - rect.y;
         cv::Mat crop_img = (*ori_img)(rect).clone();
+        // for(int i=0;i<4;i++) cv::line(bitmap,ropoints[i],ropoints[(i+1)%4],cv::Scalar(128),2);
         // cv::imshow("bitmap",bitmap);
         // cv::imshow("crop_img",crop_img);
         // cv::waitKey(0);
@@ -383,15 +390,15 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_det(){
         images.push_back(cropped_image);
     }
     if(images.empty()) return std::nullopt;
-
-    // std::println("------------------------------");
+    // cv::imshow("bitmap",bitmap);
+    // cv::waitKey(0);
     std::reverse(images.begin(), images.end());
     std::reverse(polygons.begin(), polygons.end());
     return images;
 }
 std::optional<std::vector<cv::Mat>> PaddleOCR::infer_cls(std::vector<cv::Mat> &images){
     int input_h = this->input_nodes_rec[0].dim[2]; // 
-    int max_w = 32;    // 确保宽度是32的倍数
+    int max_w = 320;    // 确保宽度是32的倍数,最好是320
     for (const auto& img : images) {
         int w = img.cols;
         int h = img.rows;
@@ -399,21 +406,27 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_cls(std::vector<cv::Mat> &i
         max_w = std::max(max_w, static_cast<int>(std::ceil(input_h * ratio / 32.0) * 32));
     }
     std::vector<cv::Mat> norm_images(images.size());
+    std::vector<cv::Mat> cls_images(images.size());
+    int cls_w = this->input_nodes_cls[0].dim[3] > 0 ? this->input_nodes_cls[0].dim[3]:192;  //旧的模型是192,新的是160
+    int cls_h = this->input_nodes_cls[0].dim[2] > 0 ? this->input_nodes_cls[0].dim[2]:48;   //旧的模型是48,新的是80
     tbb::parallel_for(0,int(images.size()),1, [&](int idx){
-        cv::Mat padded_img;
-        int left = (max_w-images[idx].cols)/2;
-        int right = (max_w-images[idx].cols)/2 + int(max_w-images[idx].cols) %2;
-        cv::copyMakeBorder(images[idx], padded_img, 0, 0, left,right, cv::BORDER_CONSTANT, cv::Scalar(114,114,114));
-        padded_img.convertTo(padded_img, CV_32FC3,1/255.0f);
+        // det w = 320
+        cv::Mat padded_img = MT::PaddingImg(images[idx],cv::Size(max_w,input_h));
+        padded_img.convertTo(padded_img, CV_32FC3,1/255.0);
         cv::subtract(padded_img, cv::Scalar(0.5,0.5,0.5), padded_img);
         cv::divide(padded_img, cv::Scalar(0.5,0.5,0.5), padded_img);
         norm_images[idx] = padded_img;
+        // cls w = 160
+        cv::Mat cls_img = MT::PaddingImg(images[idx],cv::Size(cls_w,cls_h));
+        images[idx].convertTo(cls_img, CV_32FC1,1/255.0);
+        cv::subtract(cls_img, cv::Scalar(0.5,0.5,0.5), cls_img);
+        cv::divide(cls_img, cv::Scalar(0.5,0.5,0.5), cls_img);
+        cls_images[idx] = cls_img;
     });
     // 判断图片的方向性
-    int input_w = 192;
-    cv::Mat blob = cv::dnn::blobFromImages(images, 1/255.0,cv::Size(input_w,input_h),cv::Scalar(0,0,0),false,false);
+    cv::Mat blob = cv::dnn::blobFromImages(cls_images, 1,cv::Size(cls_w,cls_h),cv::Scalar(0,0,0),true,false);
     std::vector<Ort::Value> input_tensor;
-    this->input_nodes_cls[0].dim = {(int64_t)images.size(),3,input_h,input_w};
+    this->input_nodes_cls[0].dim = {(int64_t)images.size(),3,cls_h,cls_w};
     try {
         input_tensor.push_back(Ort::Value::CreateTensor<float>(
             memory_info,
@@ -423,7 +436,7 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_cls(std::vector<cv::Mat> &i
             this->input_nodes_cls[0].dim.size())
         );
     }catch (const std::exception& e) {
-        std::println("{}", e.what());
+        std::println("creat tensor failed:{}", e.what());
         return std::nullopt; // 无值
     }
     // 模型推理
@@ -447,20 +460,22 @@ std::optional<std::vector<cv::Mat>> PaddleOCR::infer_cls(std::vector<cv::Mat> &i
     // 获取输出数据
     float* output = output_tensor[0].GetTensorMutableData<float>();
     auto output_shape = output_tensor[0].GetTensorTypeAndShapeInfo().GetShape(); // [batch,2] // {0,180}
+
+    // 最好统计一个正反文字的比例，防止误判。如果输出一张图片上绝大多数都是正文字，那么判断出的反文字大概率是误判了
     for(int i = 0; i < output_shape[0]; i++){
        int pos = i * output_shape[1];
         if(output[pos] < output[pos+1]){
-            std::println("[{:.2f},{:.2f}]",output[pos],output[pos+1]);
+            // std::println("[{:.2f},{:.2f}]",output[pos],output[pos+1]);
             cv::rotate(norm_images[i], norm_images[i], cv::ROTATE_180);// norm_images[i]旋转180度
-            cv::imshow("cls", norm_images[i]);
-            cv::waitKey(0);
+            // cv::imshow("cls", cls_images[i]);
+            // cv::waitKey(0);
         }
     }
     return norm_images; // 图片大小统一，文字方向也统一
 }
 
 std::optional<std::vector<Ort::Value>> PaddleOCR::infer_rec(std::vector<cv::Mat> &images){
-    cv::Mat blob = cv::dnn::blobFromImages(images,1,images[0].size(),cv::Scalar(0,0,0),false,false);
+    cv::Mat blob = cv::dnn::blobFromImages(images,1,images[0].size(),cv::Scalar(0,0,0),true,false);
     // 创建tensor
     std::vector<Ort::Value> input_tensor;
     this->input_nodes_rec[0].dim = { (int64_t)images.size(),3,images[0].rows,images[0].cols};

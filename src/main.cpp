@@ -178,9 +178,9 @@ void sam2(){
 void paddleocr(){
     auto paddleocr = std::make_unique<PaddleOCR>();
     std::vector<std::string> onnx_paths{
-        "../models/ocr/mobile/det.onnx",
-        "../models/ocr/mobile/cls.onnx",
-        "../models/ocr/mobile/rec_zh.onnx"
+        "../models/ocr/server/det.onnx",
+        "../models/ocr/server/cls.onnx", // [3,80,160]
+        "../models/ocr/server/rec_zh_server.onnx" // [-1,3,48,320]
     };
     auto r = paddleocr->initialize(onnx_paths,true);
     if(r.index() != 0){
@@ -190,10 +190,10 @@ void paddleocr(){
     }
     paddleocr->setparms({
         .repeat=true,
-        .min_area = 250,
-        .text = 0.5f,
+        .min_area = 200,
+        .text = 0.5f, 
         .thresh = 0.5f,
-        .unclip_ratio = 2.5f,
+        .unclip_ratio = 2.5f, // 1.0 ~ 3.0
         .dictionary = "../assets/text/zh_dict.txt"
     });
 
