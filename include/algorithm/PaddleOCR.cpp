@@ -157,7 +157,7 @@ std::variant<bool,std::string> PaddleOCR::inference(cv::Mat &image){
 void PaddleOCR::postprocess(std::vector<Ort::Value> &output_tensors){
     float* output = output_tensors[0].GetTensorMutableData<float>();
     auto output_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape(); // [batch,M,15631],M是句子最大字符数量
-    std::println("output shape=[{},{},{}]",output_shape[0],output_shape[1],output_shape[2]); // [batch,92,15631]
+    //std::println("output shape=[{},{},{}]",output_shape[0],output_shape[1],output_shape[2]); // [batch,92,15631]
     // [batch,M]
     std::vector<std::vector<float>> max_values(output_shape[0], std::vector<float>(output_shape[1], -std::numeric_limits<float>::infinity()));
     // [batch,M]

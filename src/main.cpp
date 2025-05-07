@@ -178,9 +178,9 @@ void sam2(){
 void paddleocr(){
     auto paddleocr = std::make_unique<PaddleOCR>();
     std::vector<std::string> onnx_paths{
-        "../models/ocr/server/det.onnx",
-        "../models/ocr/server/cls.onnx", // [3,80,160]
-        "../models/ocr/server/rec_zh_server.onnx" // [-1,3,48,320]
+        "../models/ocr/mobile/det.onnx",
+        "../models/ocr/mobile/cls.onnx", // [3,80,160]
+        "../models/ocr/mobile/rec_zh.onnx" // [-1,3,48,320]
     };
     auto r = paddleocr->initialize(onnx_paths,true);
     if(r.index() != 0){
